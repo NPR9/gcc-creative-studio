@@ -58,7 +58,7 @@ Creative Studio goes beyond simple demos, implementing advanced, real-world feat
 **📄 Brand Guidelines Integration:**
 
 - Upload PDF style guides that the backend processes to automatically infuse brand identity into generated content.
-- Features a robust, scalable upload mechanism using GCS Signed URLs to bypass server timeouts and handle large files efficiently.
+- Features a robust, scalable upload mechanism using GCS Signed URLs to bypass server timeouts and handle large files efficiently..
 
 **👕 Virtual Try-On (VTO):**
 
