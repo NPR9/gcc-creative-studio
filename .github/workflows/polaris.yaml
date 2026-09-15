@@ -1,0 +1,44 @@
+name: Polaris Vulnerability Scan
+on:
+  push:
+    ### run scans on each push to branches
+    branches: [ develop, prod ]
+    ### run scans on each push to specific file. you may want to run only scans when you push changes about your dependecies. e.g gradle.build, maven etc.
+    
+      
+  schedule: 
+    ### run scheduled scans to ensure repositories are scaned even if not actively developed
+    - cron: '0 10 * * TUE' ## example: '55 01 * * *' - PLEASE DO RANDOMIZE SCHEDULE TIME OTHERWISE RUNNERS WILL RUN AT THE SAME TIME FOR WHOLE COMPANY.
+  workflow_dispatch:
+    ### allow manual trigger if needed
+jobs:
+  build:
+    runs-on: [ polaris ]
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+      ### [OPTIONAL] Setup up java version if needed
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Derive Polaris project name from repository
+        id: derive_polaris_project
+        run: |
+          echo "project_name=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+      - name: Display derived Polaris project name
+        run: |
+          echo "project_name=${{ steps.derive_polaris_project.outputs.project_name }}"
+      - name: Polaris Scan
+        uses: blackduck-inc/black-duck-security-scan@v2.11.0
+        with:
+          ### SCANNING: Required fields
+          polaris_server_url: ${{ vars.POLARIS_SERVER_URL }}
+          polaris_access_token: ${{ secrets.POLARIS_ACCESS_TOKEN }}
+          polaris_assessment_types: "SCA,SAST"
+          
+          ### SCANNING
+          polaris_application_name: 'GenAI Studio'
+          polaris_project_name: ${{ steps.derive_polaris_project.outputs.project_name }}
+          polaris_waitForScan: false
