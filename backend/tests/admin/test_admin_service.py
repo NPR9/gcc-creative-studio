@@ -146,3 +146,46 @@ async def test_cleanup_stuck_jobs():
     service = AdminService(admin_repo=mock_repo)
     result = await service.cleanup_stuck_jobs()
     assert result == 5
+
+
+@pytest.mark.asyncio
+async def test_add_admin_user_by_email_adds_to_admin_workspace():
+    """Granting platform admin must also add the user to the shared admin workspace."""
+    from src.users.user_model import UserModel, UserRoleEnum
+
+    admin_user = UserModel(
+        id=99, email="new.admin@example.com", name="New Admin", roles=[]
+    )
+
+    mock_user_service = MagicMock()
+    mock_user_service.create_or_restore_user_by_email_for_admin = AsyncMock(
+        return_value=(admin_user, "created")
+    )
+    mock_user_service.ensure_user_is_platform_admin = AsyncMock(
+        return_value=UserModel(
+            id=99,
+            email="new.admin@example.com",
+            name="New Admin",
+            roles=[UserRoleEnum.USER, UserRoleEnum.ADMIN],
+        )
+    )
+
+    mock_workspace_service = MagicMock()
+    mock_workspace_service.add_user_to_admin_workspace = AsyncMock()
+    mock_workspace_service.ensure_personal_workspace = AsyncMock(
+        return_value=None
+    )
+
+    service = AdminService(
+        admin_repo=MagicMock(),
+        user_service=mock_user_service,
+        workspace_service=mock_workspace_service,
+    )
+
+    result = await service.add_admin_user_by_email(
+        email="new.admin@example.com", admin_user=admin_user
+    )
+
+    mock_workspace_service.add_user_to_admin_workspace.assert_awaited_once()
+    assert result.user_id == 99
+    assert result.email == "new.admin@example.com"

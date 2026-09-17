@@ -178,6 +178,7 @@ class AdminService:
             await self.user_service.create_or_restore_user_by_email_for_admin(email)
         )
         user = await self.user_service.ensure_user_is_platform_admin(user.id)
+        await self.workspace_service.add_user_to_admin_workspace(user)
         personal_workspace = await self.workspace_service.ensure_personal_workspace(
             user
         )
