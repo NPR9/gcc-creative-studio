@@ -38,6 +38,7 @@ export class AuthService {
     'joejoseph.george@metro.digital',
     'manish.singh@metro-gsc.in',
     'abhishek.acharya@metro-gsc.in',
+    'n.rao@metro-gsc.in',
   ]);
 
   constructor(

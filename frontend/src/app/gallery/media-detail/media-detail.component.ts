@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Component, OnDestroy} from '@angular/core';
+import {Component, OnDestroy, SecurityContext} from '@angular/core';
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {MatDialog} from '@angular/material/dialog';
-import {DomSanitizer, SafeHtml} from '@angular/platform-browser';
+import {DomSanitizer} from '@angular/platform-browser';
 import {ActivatedRoute, NavigationExtras, Router} from '@angular/router';
 import {first, Subscription} from 'rxjs';
 import {
@@ -519,8 +519,8 @@ export class MediaDetailComponent implements OnDestroy {
     this.selectedAssetForLightbox = null;
   }
 
-  public getSafeHtml(html: string): SafeHtml {
-    return this.sanitizer.bypassSecurityTrustHtml(html);
+  public getSafeHtml(html: string): string {
+    return this.sanitizer.sanitize(SecurityContext.HTML, html) ?? '';
   }
 
   public onTagsChanged(tags: any[]): void {
