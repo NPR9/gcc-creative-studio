@@ -12,20 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Local docker-compose uses this stage (`target: builder`) with `npm start`.
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY . /app/
 
 RUN npm ci
-RUN npm run build-dev
 
-FROM nginx:alpine
-COPY --from=builder /app/dist/creative-studio/browser /usr/share/nginx/html
-# It's best practice to replace the default config file.
-COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+# Production image: build Angular then serve with nginx (Cloud Run).
+FROM builder AS production-build
+RUN npm run build -- --configuration=production
 
-# Give the nginx user ownership of the app files
-RUN chown -R nginx:nginx /usr/share/nginx/html
+# Production runtime: static SPA + /api proxy that attaches a Cloud Run
+# identity token for the frontend runtime SA (roles/run.invoker on backend).
+FROM python:3.12-alpine
+
+ARG BACKEND_HOST=localhost:8080
+ENV BACKEND_HOST=${BACKEND_HOST}
+ENV STATIC_ROOT=/usr/share/nginx/html
+ENV PORT=8080
+
+COPY --from=production-build /app/dist/creative-studio/browser /usr/share/nginx/html
+COPY cloud_run_api_proxy.py /app/cloud_run_api_proxy.py
 
 EXPOSE 8080
+CMD ["python", "/app/cloud_run_api_proxy.py"]

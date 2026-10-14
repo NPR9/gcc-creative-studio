@@ -20,8 +20,7 @@ local/
 !**/environments/dev/
 !**/environments/prod/
 
-# Keep local Terraform state/cache out of git for environment folders.
-**/environments/**/.terraform/
-**/environments/**/tfplan
-
 genmedia-agent-demos
+.gemini
+# Cloud SQL Proxy binary
+cloud-sql-proxy

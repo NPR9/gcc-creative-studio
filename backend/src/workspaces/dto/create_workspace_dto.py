@@ -15,13 +15,13 @@
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-from src.workspaces.schema.workspace_model import WorkspaceScopeEnum
+from src.workspaces.schema.workspace_model import WorkspaceTypeEnum
 
 
 class CreateWorkspaceDto(BaseModel):
     """Data transfer object for creating a new workspace."""
 
-    name: str = Field(..., min_length=3, max_length=100)
-    scope: WorkspaceScopeEnum = Field(default=WorkspaceScopeEnum.PRIVATE)
+    name: str
+    type: WorkspaceTypeEnum = Field(default=WorkspaceTypeEnum.PERSONAL)
 
     model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)

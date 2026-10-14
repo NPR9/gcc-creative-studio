@@ -48,6 +48,8 @@ from src.common.storage_service import GcsService
 from src.config.config_service import config_service
 from src.galleries.dto.gallery_response_dto import MediaItemResponse
 from src.images.repository.media_item_repository import MediaRepository
+from src.usage.genai_usage_tracker import record_usage_from_response
+from src.usage.request_context import set_current_user
 from src.users.user_model import UserModel
 
 logger = logging.getLogger(__name__)
@@ -87,6 +89,7 @@ def _process_audio_in_background(
         asyncio.set_event_loop(loop)
 
         async def _async_worker():
+            set_current_user(user_email, user_id)
             async with WorkerDatabase() as db_factory:
                 async with db_factory() as db:
                     media_repo = MediaRepository(db)
@@ -131,6 +134,14 @@ def _process_audio_in_background(
                                                 ),
                                             ),
                                         ),
+                                    )
+                                    record_usage_from_response(
+                                        response,
+                                        model=request_dto.model.value,
+                                        feature="audio_gemini_generate",
+                                        media_count=1,
+                                        user_email=user_email,
+                                        user_id=user_id,
                                     )
                                     if (
                                         not response.candidates
@@ -296,8 +307,7 @@ def _process_audio_in_background(
                                     if not audio_b64:
                                         return None
 
-                                    timestamp = int(time.time())
-                                    file_name = f"lyria_music_{timestamp}_{uid_short}_{index}.wav"
+                                    file_name = f"lyria_music_{media_item_id}_{uid_short}_{index}.wav"
                                     return gcs_service.store_to_gcs(
                                         folder="lyria_audio",
                                         file_name=file_name,

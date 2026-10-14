@@ -143,7 +143,6 @@ class TestInviteUser:
             json={
                 "email": "guest@example.com",
                 "role": "viewer",
-                "groupId": 1,
             },
         )
 
@@ -159,7 +158,6 @@ class TestInviteUser:
             json={
                 "email": "unknown@example.com",
                 "role": "viewer",
-                "groupId": 1,
             },
         )
 

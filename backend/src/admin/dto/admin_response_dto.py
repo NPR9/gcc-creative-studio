@@ -15,7 +15,7 @@
 from enum import Enum
 
 from src.common.base_dto import BaseDto
-from src.groups.schema.group_model import GroupModel
+from src.workspaces.schema.workspace_model import WorkspaceModel
 
 
 class AdminOverviewStats(BaseDto):
@@ -72,4 +72,4 @@ class AddUserByEmailResponse(BaseDto):
     created_new_user: bool
     user_id: int
     email: str
-    group: GroupModel
+    workspace: WorkspaceModel | None = None

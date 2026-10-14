@@ -52,7 +52,6 @@ import {isPlatformBrowser} from '@angular/common';
 })
 export class HeaderComponent implements OnDestroy {
   currentUser: UserModel | null;
-  avatarLoadFailed = false;
   menuFixed = false;
   menuIsHovered = false;
 
@@ -111,18 +110,6 @@ export class HeaderComponent implements OnDestroy {
 
   private setPath(url: string): SafeResourceUrl {
     return this.sanitizer.bypassSecurityTrustResourceUrl(url);
-  }
-
-  get avatarFallbackText(): string {
-    const firstName = (this.currentUser?.name || '').trim().split(/\s+/)[0];
-    if (!firstName) {
-      return '';
-    }
-    return firstName.charAt(0).toUpperCase();
-  }
-
-  onAvatarLoadError(): void {
-    this.avatarLoadFailed = true;
   }
 
   logout() {

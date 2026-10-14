@@ -1,0 +1,88 @@
+/**
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.dialog-title {
+  margin-bottom: 0;
+  padding-bottom: 0.5rem;
+}
+
+.dialog-content {
+  min-width: min(920px, 90vw);
+  max-height: 70vh;
+  padding-top: 0.75rem;
+}
+
+.dialog-intro {
+  margin: 0 0 1.25rem;
+  color: #a1a1aa;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.loading-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 2.5rem 0;
+}
+
+.error-banner {
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid #3f3f46;
+  border-radius: 0.75rem;
+}
+
+.prices-table {
+  width: 100%;
+
+  th.mat-mdc-header-cell,
+  td.mat-mdc-cell {
+    padding: 1rem 1.25rem;
+    vertical-align: top;
+  }
+
+  th.mat-mdc-header-cell {
+    font-weight: 600;
+    background: rgba(39, 39, 42, 0.9);
+  }
+
+  tr.mat-mdc-row:hover {
+    background: rgba(63, 63, 70, 0.35);
+  }
+}
+
+.model-cell {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.notes-cell {
+  max-width: 280px;
+  font-size: 0.8125rem;
+  color: #a1a1aa;
+  line-height: 1.45;
+}
+
+.dialog-actions {
+  padding: 1rem 1.5rem 1.25rem;
+}

@@ -16,7 +16,7 @@
 
 <div class="p-4">
   <div class="flex justify-between items-center mb-4">
-    <h1 class="text-3xl font-semibold">User Management</h1>
+    <h1 class="text-3xl font-semibold">Workspace Management</h1>
     <div class="flex gap-2">
       <button
         mat-raised-button
@@ -30,45 +30,42 @@
       <button
         mat-raised-button
         color="primary"
-        (click)="openCreateGroupDialog()"
+        (click)="openCreateTeamWorkspaceDialog()"
         class="!ml-4"
       >
-        <mat-icon class="mr-2">group_add</mat-icon>
-        Create Group
+        <mat-icon class="mr-2">workspaces</mat-icon>
+        Create Team Workspace
       </button>
     </div>
   </div>
 
-  <!-- Filter -->
   <div class="flex gap-4 items-center mb-4">
     <mat-form-field appearance="outline" class="flex-grow !mb-0">
       <mat-label>Filter by Name or Email</mat-label>
       <input
         matInput
         (input)="applyFilter($event)"
-        placeholder="Search users or groups"
+        placeholder="Search users or workspaces"
         #input
       />
       <mat-icon matSuffix>search</mat-icon>
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="min-w-[240px] !mb-0">
-      <mat-label>Filter by Group</mat-label>
-      <mat-select (selectionChange)="applyGroupFilter($event.value)">
-        <mat-option value="">All groups</mat-option>
-        <mat-option *ngFor="let group of groups" [value]="group.id">
-          {{ group.name }}
+      <mat-label>Filter by Team Workspace</mat-label>
+      <mat-select (selectionChange)="applyWorkspaceFilter($event.value)">
+        <mat-option value="">All team workspaces</mat-option>
+        <mat-option *ngFor="let workspace of workspaces" [value]="workspace.id">
+          {{ workspace.name }}
         </mat-option>
       </mat-select>
     </mat-form-field>
   </div>
 
-  <!-- Loading Indicator -->
   <div *ngIf="isLoading" class="flex justify-center items-center py-10">
     <mat-spinner diameter="50"></mat-spinner>
   </div>
 
-  <!-- Error Message -->
   <div
     *ngIf="errorLoadingUsers && !isLoading"
     class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
@@ -78,132 +75,94 @@
     <span class="block sm:inline">{{ errorLoadingUsers }}</span>
   </div>
 
-  <!-- Hierarchical Tree Table -->
   <div
     *ngIf="!isLoading && !errorLoadingUsers"
     class="mat-elevation-z8 rounded-lg overflow-auto"
   >
     <table mat-table [dataSource]="dataSource" class="w-full">
-      <!-- Expand Column -->
       <ng-container matColumnDef="expand">
         <th mat-header-cell *matHeaderCellDef class="!w-12"></th>
         <td mat-cell *matCellDef="let node" class="!w-12">
           <button
-            *ngIf="node.type === 'group'"
+            *ngIf="node.type === 'workspace'"
             mat-icon-button
-            (click)="toggleGroup(node.groupId); $event.stopPropagation()"
+            (click)="toggleWorkspace(node.workspaceId); $event.stopPropagation()"
           >
             <mat-icon>{{
-              isGroupExpanded(node.groupId) ? 'expand_more' : 'chevron_right'
+              isWorkspaceExpanded(node.workspaceId) ? 'expand_more' : 'chevron_right'
             }}</mat-icon>
           </button>
         </td>
       </ng-container>
 
-      <!-- Name Column -->
       <ng-container matColumnDef="name">
         <th mat-header-cell *matHeaderCellDef>Name</th>
-        <td
-          mat-cell
-          *matCellDef="let node"
-          [class.!pl-12]="node.level === 1"
-        >
+        <td mat-cell *matCellDef="let node" [class.!pl-12]="node.level === 1">
           <div class="flex items-center gap-2">
-            <mat-icon *ngIf="node.type === 'group'" class="text-blue-500"
-              >group</mat-icon
+            <mat-icon *ngIf="node.type === 'workspace'" class="text-blue-500"
+              >workspaces</mat-icon
             >
             <mat-icon *ngIf="node.type === 'member'" class="text-gray-400"
               >person</mat-icon
             >
-            <span [class.font-semibold]="node.type === 'group'">
-              {{ node.type === 'group' ? node.groupName : node.member?.name }}
+            <span [class.font-semibold]="node.type === 'workspace'">
+              {{
+                node.type === 'workspace' ? node.workspaceName : node.member?.name || node.member?.email
+              }}
             </span>
-            <mat-chip
-              *ngIf="node.type === 'group'"
-              class="!text-xs !h-6 !px-2"
-            >
+            <mat-chip *ngIf="node.type === 'workspace'" class="!text-xs !h-6 !px-2">
               {{ node.memberCount }}
               {{ node.memberCount === 1 ? 'member' : 'members' }}
+            </mat-chip>
+            <mat-chip
+              *ngIf="node.type === 'workspace'"
+              class="!text-xs !h-6 !px-2"
+              [class.bg-purple-100]="node.workspaceType === WorkspaceType.TEAM"
+              [class.bg-amber-100]="node.workspaceType === WorkspaceType.ADMIN"
+            >
+              {{ node.workspaceType }}
             </mat-chip>
           </div>
         </td>
       </ng-container>
 
-      <!-- Email Column -->
       <ng-container matColumnDef="email">
-        <th mat-header-cell *matHeaderCellDef>Email / Country</th>
+        <th mat-header-cell *matHeaderCellDef>Email</th>
         <td mat-cell *matCellDef="let node">
           <span *ngIf="node.type === 'member'">{{ node.member?.email }}</span>
-          <span *ngIf="node.type === 'group'" class="text-gray-500">{{
-            node.countryCode || 'No country'
-          }}</span>
         </td>
       </ng-container>
 
-      <!-- Roles Column -->
-      <ng-container matColumnDef="roles">
-        <th mat-header-cell *matHeaderCellDef>Role</th>
-        <td mat-cell *matCellDef="let node">
-          <mat-chip
-            *ngIf="node.type === 'member'"
-            [class]="
-              node.member?.role === 'admin'
-                ? 'bg-purple-100 text-purple-800'
-                : 'bg-gray-100 text-gray-800'
-            "
-            class="!text-xs !h-6 !px-2"
-          >
-            {{ node.member?.role | titlecase }}
-          </mat-chip>
-        </td>
-      </ng-container>
-
-      <!-- Created At Column -->
       <ng-container matColumnDef="createdAt">
-        <th mat-header-cell *matHeaderCellDef>Joined At</th>
-        <td mat-cell *matCellDef="let node">
-          <span *ngIf="node.type === 'member'">{{
-            node.member?.joinedAt | date: 'short'
-          }}</span>
-        </td>
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let node"></td>
       </ng-container>
 
-      <!-- Actions Column -->
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef class="!text-right !pr-4">
           Actions
         </th>
         <td mat-cell *matCellDef="let node" class="text-right pr-2">
-          <!-- Group Actions -->
-          <ng-container *ngIf="node.type === 'group'">
+          <ng-container *ngIf="node.type === 'workspace'">
             <button
+              *ngIf="node.workspaceType === WorkspaceType.TEAM"
               mat-icon-button
               color="warn"
-              (click)="deleteGroup(node.groupId, node.groupName); $event.stopPropagation()"
-              matTooltip="Delete Group"
+              (click)="deleteWorkspace(node.workspaceId, node.workspaceName, node.workspaceType); $event.stopPropagation()"
+              matTooltip="Delete Team Workspace"
             >
               <mat-icon>delete</mat-icon>
             </button>
           </ng-container>
-          
-          <!-- Member Actions -->
+
           <ng-container *ngIf="node.type === 'member'">
             <button
               mat-icon-button
-              color="primary"
-              (click)="openUserForm(node.member); $event.stopPropagation()"
-              matTooltip="Edit User Roles"
-            >
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button
-              *ngIf="node.member?.userId !== currentUserId"
-              mat-icon-button
               color="warn"
-              (click)="deleteUser(node.member.userId); $event.stopPropagation()"
-              matTooltip="Delete User"
+              (click)="removeMemberFromWorkspace(node); $event.stopPropagation()"
+              matTooltip="Remove from workspace"
             >
-              <mat-icon>delete</mat-icon>
+              <mat-icon>person_remove</mat-icon>
             </button>
           </ng-container>
         </td>
@@ -213,21 +172,18 @@
       <tr
         mat-row
         *matRowDef="let row; columns: displayedColumns"
-        [class.bg-gray-50]="row.type === 'group'"
-        [class.hover:bg-gray-100]="row.type === 'group'"
-        [class.hover:bg-slate-800]="row.type === 'member'"
-        [class.cursor-pointer]="row.type === 'group'"
-        (click)="row.type === 'group' && toggleGroup(row.groupId)"
+        [class.bg-gray-50]="row.type === 'workspace'"
+        [class.cursor-pointer]="row.type === 'workspace'"
+        (click)="row.type === 'workspace' && toggleWorkspace(row.workspaceId)"
       ></tr>
 
-      <!-- Row shown when there is no matching data. -->
       <tr class="mat-row" *matNoDataRow>
         <td class="mat-cell text-center py-4" [attr.colspan]="displayedColumns.length">
           <span *ngIf="currentFilter">
-            No users or groups found matching "{{ currentFilter }}".
+            No users or workspaces found matching "{{ currentFilter }}".
           </span>
           <span *ngIf="!currentFilter">
-            No groups or users found. Create a group to get started.
+            No workspaces found. Create a team workspace to get started.
           </span>
         </td>
       </tr>

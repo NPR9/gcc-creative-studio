@@ -17,8 +17,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.auth.auth_guard import RoleChecker
 from src.multimodal.dto.gemini_prompt_enhancer_dto import (
-    GenerateTitleRequestDto,
-    GenerateTitleResponseDto,
     RandomPromptRequestDto,
     RewritePromptRequestDto,
     RewrittenOrRandomPromptResponse,
@@ -90,24 +88,4 @@ async def random_prompt_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate random prompt from Gemini: {e}",
-        )
-
-
-@router.post(
-    "/generate-title",
-    response_model=GenerateTitleResponseDto,
-    summary="Generate a short title and summary for a text message",
-)
-async def generate_title_endpoint(
-    request: GenerateTitleRequestDto,
-    gemini_service: GeminiService = Depends(),
-):
-    """Generates a short, concise title (max 5 words) and a longer summary for the provided text."""
-    try:
-        data = gemini_service.generate_title_and_summary(request.text)
-        return GenerateTitleResponseDto(**data)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate title and summary from Gemini: {e}",
         )

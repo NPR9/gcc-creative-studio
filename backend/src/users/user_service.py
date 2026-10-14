@@ -121,6 +121,26 @@ class UserService:
         # 3. Call the repository's create() method
         return await self.user_repo.create(user_data)
 
+    async def ensure_user_is_platform_admin(self, user_id: int) -> UserModel:
+        """Ensures a user has the platform admin role."""
+        existing_user = await self.user_repo.get_by_id(user_id)
+        if not existing_user:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        if self._has_admin_role(existing_user.roles):
+            return existing_user
+
+        updated_roles = [
+            self._role_name(role) for role in existing_user.roles
+        ]
+        if UserRoleEnum.USER.value not in updated_roles:
+            updated_roles.append(UserRoleEnum.USER.value)
+        if UserRoleEnum.ADMIN.value not in updated_roles:
+            updated_roles.append(UserRoleEnum.ADMIN.value)
+        return await self.user_repo.update(user_id, {"roles": updated_roles})
+
     async def create_or_restore_user_by_email_for_admin(
         self,
         email: str,

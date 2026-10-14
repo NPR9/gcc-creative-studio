@@ -248,8 +248,8 @@ class MediaTemplateService:
 
         # --- Convert all source inputs into new, permanent System Assets ---
         new_source_asset_links: list[SourceAssetLink] = []
-        public_workspace = await self.workspace_repo.get_public_workspace()
-        if not public_workspace:
+        team_workspace = await self.workspace_repo.get_system_team_workspace()
+        if not team_workspace:
             # This should not happen if bootstrap script has run
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -288,7 +288,7 @@ class MediaTemplateService:
                         await self.source_asset_service.upload_asset(
                             user=user,
                             file=upload_file,
-                            workspace_id=public_workspace.id,
+                            workspace_id=team_workspace.id,
                             scope=AssetScopeEnum.SYSTEM,
                             asset_type=source_asset.asset_type,
                             aspect_ratio=source_asset.aspect_ratio,
@@ -334,7 +334,7 @@ class MediaTemplateService:
                         await self.source_asset_service.upload_asset(
                             user=user,
                             file=upload_file,
-                            workspace_id=public_workspace.id,
+                            workspace_id=team_workspace.id,
                             scope=AssetScopeEnum.SYSTEM,
                             asset_type=AssetTypeEnum.GENERIC_IMAGE,
                             aspect_ratio=source_media_item.aspect_ratio,

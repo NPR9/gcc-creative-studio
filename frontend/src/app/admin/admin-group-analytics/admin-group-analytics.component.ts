@@ -15,11 +15,15 @@
  */
 
 import {Component, OnInit} from '@angular/core';
+import {MatDialog} from '@angular/material/dialog';
 import {
-  GroupUsageBreakdown,
-  GroupUsageSummary,
-} from '../../common/models/group.model';
-import {GroupService} from '../../services/group/group.service';
+  AdminDashboardService,
+  UserUsageCostRow,
+  WorkspaceUsageCostResponse,
+} from '../../services/admin/admin-dashboard.service';
+import {WorkspaceService} from '../../services/workspace/workspace.service';
+import {Workspace, WorkspaceType} from '../../common/models/workspace.model';
+import {UnitPricesDialogComponent} from './unit-prices-dialog.component';
 
 @Component({
   selector: 'app-admin-group-analytics',
@@ -35,16 +39,23 @@ export class AdminGroupAnalyticsComponent implements OnInit {
   startCalendarDate: Date | null = null;
   endCalendarDate: Date | null = null;
 
-  summary: GroupUsageSummary = {
-    totalGroups: 0,
-    totalMembers: 0,
-    totalSpendUsd: 0,
-    totalTokensConsumed: 0,
-  };
+  workspaces: Workspace[] = [];
+  selectedWorkspaceId: number | null = null;
 
-  breakdown: GroupUsageBreakdown[] = [];
+  usage: WorkspaceUsageCostResponse | null = null;
+  userColumns = [
+    'userEmail',
+    'eventCount',
+    'tokens',
+    'media',
+    'cost',
+  ];
 
-  constructor(private groupService: GroupService) {}
+  constructor(
+    private adminDashboardService: AdminDashboardService,
+    private workspaceService: WorkspaceService,
+    private dialog: MatDialog,
+  ) {}
 
   ngOnInit(): void {
     const now = new Date();
@@ -53,52 +64,135 @@ export class AdminGroupAnalyticsComponent implements OnInit {
 
     this.startCalendarDate = startOfMonth;
     this.endCalendarDate = endOfMonth;
-
     this.startDate = this.formatDate(startOfMonth);
     this.endDate = this.formatDate(endOfMonth);
 
-    this.loadAnalytics();
+    this.loadWorkspaces();
   }
 
-  onCalendarDateChange(event: {startDate: Date | null; endDate: Date | null}): void {
+  onCalendarDateChange(event: {
+    startDate: Date | null;
+    endDate: Date | null;
+  }): void {
     this.startCalendarDate = event.startDate;
     this.endCalendarDate = event.endDate;
     this.startDate = this.formatDate(this.startCalendarDate);
     this.endDate = this.formatDate(this.endCalendarDate);
-    this.loadAnalytics();
+    this.loadUsage();
   }
 
-  private loadAnalytics(): void {
+  onWorkspaceChange(): void {
+    this.loadUsage();
+  }
+
+  get selectedWorkspace(): Workspace | undefined {
+    return this.workspaces.find(w => w.id === this.selectedWorkspaceId);
+  }
+
+  get isPersonalWorkspace(): boolean {
+    return this.selectedWorkspace?.type === WorkspaceType.PERSONAL;
+  }
+
+  get users(): UserUsageCostRow[] {
+    return this.usage?.users || [];
+  }
+
+  get totalCost(): number {
+    return this.usage?.totalEstimatedCostUsd || 0;
+  }
+
+  get totalEvents(): number {
+    return this.users.reduce((sum, u) => sum + (u.eventCount || 0), 0);
+  }
+
+  get totalTokens(): number {
+    return this.users.reduce(
+      (sum, u) =>
+        sum +
+        (u.totalPromptTokens || 0) +
+        (u.totalCandidatesTokens || 0) +
+        (u.totalThoughtsTokens || 0),
+      0,
+    );
+  }
+
+  scopeLabel(scope: string | undefined): string {
+    if (scope === WorkspaceType.PERSONAL) {
+      return 'Personal';
+    }
+    if (scope === WorkspaceType.TEAM) {
+      return 'Team';
+    }
+    return scope || '';
+  }
+
+  openUnitPricesDialog(): void {
+    this.dialog.open(UnitPricesDialogComponent, {
+      width: '960px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
+      panelClass: 'unit-prices-dialog-panel',
+    });
+  }
+
+  private loadWorkspaces(): void {
     this.isLoading = true;
     this.errorMessage = null;
-
-    this.groupService.getUsageSummary(this.startDate, this.endDate).subscribe({
-      next: summary => {
-        this.summary = summary;
+    // List all non-personal workspaces platform-wide so each workspace's spend
+    // can be tracked (team and admin). Personal workspaces are excluded since
+    // per-user spend is already shown in the table below.
+    this.workspaceService.getAllWorkspacesAdmin().subscribe({
+      next: workspaces => {
+        this.workspaces = (workspaces || [])
+          .filter(w => w.type !== WorkspaceType.PERSONAL)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        if (this.workspaces.length && this.selectedWorkspaceId == null) {
+          this.selectedWorkspaceId = this.workspaces[0].id;
+        }
+        this.loadUsage();
       },
       error: err => {
-        this.errorMessage = err?.message || 'Failed to load usage summary.';
+        this.errorMessage =
+          err?.message || 'Failed to load workspaces for usage analytics.';
         this.isLoading = false;
       },
     });
+  }
 
-    this.groupService.getUsageBreakdown(this.startDate, this.endDate).subscribe({
-      next: breakdown => {
-        this.breakdown = breakdown;
-        this.isLoading = false;
-      },
-      error: err => {
-        this.errorMessage = err?.message || 'Failed to load usage breakdown.';
-        this.isLoading = false;
-      },
-    });
+  private loadUsage(): void {
+    if (this.selectedWorkspaceId == null) {
+      this.usage = null;
+      this.isLoading = false;
+      return;
+    }
+
+    this.isLoading = true;
+    this.errorMessage = null;
+    this.adminDashboardService
+      .getUsageCostByWorkspace(
+        this.selectedWorkspaceId,
+        this.startDate,
+        this.endDate,
+      )
+      .subscribe({
+        next: usage => {
+          this.usage = usage;
+          this.isLoading = false;
+        },
+        error: err => {
+          this.errorMessage =
+            err?.error?.detail ||
+            err?.message ||
+            'Failed to load workspace usage.';
+          this.isLoading = false;
+        },
+      });
   }
 
   private formatDate(date: Date | null): string {
     if (!date) {
       return '';
     }
-
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');

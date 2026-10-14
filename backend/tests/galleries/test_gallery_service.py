@@ -88,6 +88,7 @@ async def test_enrich_source_asset_link(service):
     mock_asset = MagicMock()
     mock_asset.gcs_uri = "gs://bucket/asset.jpg"
     mock_asset.thumbnail_gcs_uri = "gs://bucket/thumb.jpg"
+    mock_asset.mime_type = "image/jpeg"
     service.mock_source_asset_repo.get_by_id.return_value = mock_asset
 
     # Mock iam_signer_credentials
@@ -228,10 +229,10 @@ async def test_bulk_delete_success(service):
         roles=[UserRoleEnum.USER],
     )
 
-    mock_media = MagicMock(user_id=1, workspace_id=99)
+    mock_media = MagicMock(id=1, user_id=1, workspace_id=99, gcs_uris=["gs://a"])
     service.mock_media_repo.get_by_id.return_value = mock_media
 
-    mock_asset = MagicMock(user_id=1, workspace_id=99)
+    mock_asset = MagicMock(id=2, user_id=1, workspace_id=99)
     service.mock_source_asset_repo.get_by_id.return_value = mock_asset
 
     result = await service.bulk_delete(bulk_dto, current_user)
@@ -241,6 +242,47 @@ async def test_bulk_delete_success(service):
     service.mock_source_asset_repo.soft_delete.assert_called_once_with(
         2, deleted_by=1
     )
+
+
+@pytest.mark.anyio
+async def test_bulk_delete_single_image_from_set(service):
+    from src.galleries.dto.bulk_delete_dto import (
+        BulkDeleteDto,
+        BulkDeleteItemDto,
+    )
+
+    bulk_dto = BulkDeleteDto(
+        workspace_id=99,
+        items=[BulkDeleteItemDto(id=1, type="media_item", image_index=1)],
+    )
+    current_user = UserModel(
+        id=1,
+        email="user@test.com",
+        name="User",
+        roles=[UserRoleEnum.USER],
+    )
+
+    mock_media = MagicMock(
+        id=1,
+        user_id=1,
+        workspace_id=99,
+        gcs_uris=["gs://a", "gs://b", "gs://c"],
+        thumbnail_uris=["gs://ta", "gs://tb", "gs://tc"],
+        original_gcs_uris=["gs://oa", "gs://ob", "gs://oc"],
+    )
+    service.mock_media_repo.get_by_id.return_value = mock_media
+    service.mock_media_repo.update.return_value = mock_media
+
+    result = await service.bulk_delete(bulk_dto, current_user)
+
+    assert result["deleted_count"] == 1
+    service.mock_media_repo.soft_delete.assert_not_called()
+    service.mock_media_repo.update.assert_called_once()
+    update_args = service.mock_media_repo.update.call_args
+    assert update_args[0][0] == 1
+    assert update_args[0][1]["gcs_uris"] == ["gs://a", "gs://c"]
+    assert update_args[0][1]["thumbnail_uris"] == ["gs://ta", "gs://tc"]
+    assert update_args[0][1]["num_media"] == 2
 
 
 @pytest.mark.anyio
@@ -566,6 +608,7 @@ async def test_get_media_by_id_with_both_source_references(service):
     source_asset = MagicMock()
     source_asset.gcs_uri = "gs://bucket/asset.jpg"
     source_asset.thumbnail_gcs_uri = "gs://bucket/thumb.jpg"
+    source_asset.mime_type = "image/jpeg"
 
     def get_by_id_side_effect(id, **kwargs):
         if id == 123:

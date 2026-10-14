@@ -63,6 +63,7 @@ export class AdminHomeComponent implements OnInit, AfterViewInit, OnDestroy {
   private monthlyUsersChartContainer!: ElementRef;
 
   isCleared = false;
+
   startDate = '';
   endDate = '';
   startCalendarDate: Date | null = null;
@@ -82,6 +83,7 @@ export class AdminHomeComponent implements OnInit, AfterViewInit, OnDestroy {
     private authService: AuthService,
     private adminService: AdminDashboardService,
     private snackBar: MatSnackBar,
+
     @Inject(PLATFORM_ID) private platformId: Object,
   ) {
     this.isSuperAdmin$ = of(this.authService.isUserAdmin());

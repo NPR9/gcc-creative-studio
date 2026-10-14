@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.auth.auth_guard import RoleChecker, get_current_user
 from src.common.dto.pagination_response_dto import PaginationResponseDto
-from src.galleries.dto.bulk_copy_dto import BulkCopyDto
+from src.galleries.dto.bulk_copy_dto import BulkCopyDto, ShareItemsDto
 from src.galleries.dto.bulk_delete_dto import BulkDeleteDto
 from src.galleries.dto.bulk_download_dto import BulkDownloadDto
 from src.galleries.dto.gallery_response_dto import MediaItemResponse
@@ -27,6 +27,7 @@ from src.galleries.dto.unified_gallery_response import (
 from src.galleries.gallery_service import GalleryService
 from src.users.user_model import UserModel, UserRoleEnum
 from src.workspaces.workspace_auth_guard import WorkspaceAuth
+from src.workspaces.workspace_service import WorkspaceService
 
 router = APIRouter(
     prefix="/api/gallery",
@@ -152,3 +153,37 @@ async def bulk_copy_items(
     service: GalleryService = Depends(),
 ):
     """Bulk copy media items and source assets to another workspace."""
+    return await service.bulk_copy(
+        bulk_copy_dto=bulk_copy_dto,
+        current_user=current_user,
+    )
+
+
+@router.post("/share")
+async def share_items_to_shared_workspace(
+    share_dto: ShareItemsDto,
+    current_user: UserModel = Depends(get_current_user),
+    service: GalleryService = Depends(),
+    workspace_service: WorkspaceService = Depends(),
+):
+    """Shares items into the caller's assigned shared (team) workspace.
+
+    Items are copied; the shared copies have an independent lifecycle from the
+    originals in the caller's personal workspace.
+    """
+    shared_workspace = await workspace_service.get_assigned_shared_workspace(
+        current_user
+    )
+    if not shared_workspace or shared_workspace.id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You are not assigned to a shared workspace.",
+        )
+
+    return await service.bulk_copy(
+        bulk_copy_dto=BulkCopyDto(
+            items=share_dto.items,
+            target_workspace_id=shared_workspace.id,
+        ),
+        current_user=current_user,
+    )

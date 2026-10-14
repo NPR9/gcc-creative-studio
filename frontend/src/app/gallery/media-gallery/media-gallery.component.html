@@ -207,21 +207,6 @@
           variant="primary"
           size="small"
           shape="circle"
-          (click)="shareSelectedToGroup()"
-          title="Move selected media to group"
-          [disabled]="selectedMediaItemIds.length === 0 || isSharingToGroup || isCopying || isDownloading || isDeleting"
-        >
-          <mat-icon *ngIf="!isSharingToGroup">group_add</mat-icon>
-          <mat-progress-spinner
-            *ngIf="isSharingToGroup"
-            mode="indeterminate"
-            diameter="18"
-          ></mat-progress-spinner>
-        </studio-button>
-        <studio-button
-          variant="primary"
-          size="small"
-          shape="circle"
           (click)="openBulkAssignTagsDialog()"
           title="Tag selected"
           [disabled]="selectedItems.size === 0 || isCopying || isDownloading || isDeleting"
@@ -239,22 +224,6 @@
           <mat-icon *ngIf="!isDownloading">download</mat-icon>
           <mat-progress-spinner
             *ngIf="isDownloading"
-            mode="indeterminate"
-            diameter="18"
-          ></mat-progress-spinner>
-        </studio-button>
-
-        <studio-button
-          variant="primary"
-          size="small"
-          shape="circle"
-          (click)="deleteSelected()"
-          title="Delete selected"
-          [disabled]="isDeleting || isDownloading || isCopying"
-        >
-          <mat-icon *ngIf="!isDeleting">delete</mat-icon>
-          <mat-progress-spinner
-            *ngIf="isDeleting"
             mode="indeterminate"
             diameter="18"
           ></mat-progress-spinner>
@@ -288,9 +257,13 @@
               [isSelected]="isItemSelected(media)"
               [anyItemSelected]="selectedItems.size > 0"
               [filteredTags]="tagsFilter"
+              [showShareAction]="true"
+              [showDeleteAction]="true"
               (mediaItemSelected)="mediaItemSelected.emit($event)"
               (mediaSelected)="mediaSelected.emit({mediaItem: $any($event), selectedIndex: 0})"
               (selectionToggled)="toggleSelection($event.item, $event.event, $event.selectedIndex)"
+              (shareClicked)="shareItemToTeam($event)"
+              (deleteClicked)="deleteItem($event)"
             ></app-gallery-card>
           </div>
         </div>

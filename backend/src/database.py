@@ -17,6 +17,7 @@
 from collections.abc import AsyncGenerator
 import asyncio
 import asyncpg
+from contextlib import asynccontextmanager
 
 from google.cloud.sql.connector import Connector, IPTypes
 from sqlalchemy.ext.asyncio import (
@@ -167,6 +168,56 @@ async_session_local = async_sessionmaker(
     expire_on_commit=False,
     autoflush=False,
 )
+
+
+@asynccontextmanager
+async def isolated_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Own engine + session for worker threads and usage logging.
+
+    Unlike the app-global pool, each call creates a connector bound to the
+    current event loop (required for Cloud SQL from background workers).
+    """
+    connector: Connector | None = None
+    if (
+        config_service.INSTANCE_CONNECTION_NAME
+        and not config_service.USE_CLOUD_SQL_AUTH_PROXY
+    ):
+        connector = Connector(loop=asyncio.get_running_loop())
+
+        async def get_conn():
+            return await connector.connect_async(
+                config_service.INSTANCE_CONNECTION_NAME,
+                "asyncpg",
+                user=config_service.DB_USER,
+                password=config_service.DB_PASS,
+                db=config_service.DB_NAME,
+                ip_type=IPTypes.PUBLIC,
+            )
+
+        isolated_engine = create_async_engine(
+            "postgresql+asyncpg://",
+            async_creator=get_conn,
+            echo=config_service.LOG_LEVEL == "DEBUG",
+        )
+    else:
+        isolated_engine = create_async_engine(
+            get_conn_string(),
+            echo=config_service.LOG_LEVEL == "DEBUG",
+        )
+
+    session_factory = async_sessionmaker(
+        bind=isolated_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
+    try:
+        async with session_factory() as session:
+            yield session
+    finally:
+        await isolated_engine.dispose()
+        if connector:
+            await connector.close_async()
 
 
 class WorkerDatabase:

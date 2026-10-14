@@ -25,7 +25,7 @@ Before you begin, ensure you have the following tools installed on your system:
 
 You can connect to your new GCP Argolis Account by setting a `backend/.env` file for the backend and a `frontend/src/environments/development.environment.ts` file for the frontend.
 
-> **Important!!!** set `isLocal = True`, in both frontend and backend, this is so that instead of loggin in with Identity Platform, we login with Firebase, and we keep Identity Platform Authorized Javascript origins clean, without the need to whitelist localhost.
+> **Important!!!** set `isLocal = true` in the frontend environment and `ENVIRONMENT=local` in the backend `.env`. Local mode bypasses IAP and uses a synthetic identity header (`localUserEmail` / `LOCAL_USER_EMAIL`) so you do not need to whitelist localhost on IAP.
 
 Add the following env variables in your cloned repo “gcc-creative-studio” modifying the corresponding locations, and replacing with your env values:
 
@@ -35,6 +35,7 @@ Add the following env variables in your cloned repo “gcc-creative-studio” mo
 # Common env vars
 FRONTEND_URL="http://localhost:4200"
 ENVIRONMENT="local"
+LOCAL_USER_EMAIL="dev@example.com"
 LOG_LEVEL="INFO"
 
 # Project ID: creative-studio-deploy
@@ -62,29 +63,18 @@ ADMIN_USER_EMAIL="your-user-email"
 > - **Safe Experimentation**: Clear volume bindings locally without risking production states or accidental cloud data drops.
 > - **Instant Migrations Validation**: Speed runs Alembic updates completely isolated and offline.
 
-### `frontend/src/environments/development.environment.ts` file
+### `frontend/src/environments/environment.development.ts` file
 
 ```typescript
 export const environment = {
-  // Project ID: creative-studio-deploy
-  firebase: {
-    apiKey: "your-api-key",
-    authDomain: "creative-studio-deploy.firebaseapp.com",
-    projectId: "creative-studio-deploy",
-    storageBucket: "creative-studio-deploy.firebasestorage.app",
-    messagingSenderId: "your-messaging-sender-id",
-    appId: "your-app-id",
-    measurementId: "G-XXXXXXXX",
-  },
   production: false,
   isLocal: true,
-  GOOGLE_CLIENT_ID: "XXXX-XXXXXXXXXXX.apps.googleusercontent.com",
-  backendURL: "http://localhost:8080/api",
-
-  // Common env vars
+  backendURL: '/api',
+  localUserEmail: 'dev@example.com',
+  iapClientId: '',
   EMAIL_REGEX:
     /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
-  ADMIN: "admin",
+  ADMIN: 'admin',
 };
 ```
 

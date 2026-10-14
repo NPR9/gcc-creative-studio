@@ -15,17 +15,27 @@
  */
 
 import {Injectable} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import {HttpClient, HttpParams} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {environment} from '../../../environments/environment';
 import {WorkspaceRole} from '../../common/models/workspace-member.model';
 import {Workspace} from '../../common/models/workspace.model';
+import {WorkspaceMember} from '../../common/models/workspace-member.model';
+
+export interface AddUserByEmailResponse {
+  provisioningStatus: string;
+  createdNewUser: boolean;
+  userId: number;
+  email: string;
+  workspace?: Workspace;
+}
 
 @Injectable({
   providedIn: 'root',
 })
 export class WorkspaceService {
   private apiUrl = `${environment.backendURL}/workspaces`;
+  private adminApiUrl = `${environment.backendURL}/admin/workspaces`;
 
   constructor(private http: HttpClient) {}
 
@@ -37,6 +47,16 @@ export class WorkspaceService {
     return this.http.get<Workspace[]>(`${this.apiUrl}/switcher`);
   }
 
+  getAssignedWorkspace(): Observable<Workspace | null> {
+    return this.http.get<Workspace | null>(`${this.apiUrl}/assigned`);
+  }
+
+  getWorkspaceMembers(workspaceId: number): Observable<WorkspaceMember[]> {
+    return this.http.get<WorkspaceMember[]>(
+      `${this.apiUrl}/${workspaceId}/members`,
+    );
+  }
+
   createWorkspace(name: string): Observable<Workspace> {
     return this.http.post<Workspace>(this.apiUrl, {name});
   }
@@ -45,12 +65,51 @@ export class WorkspaceService {
     workspaceId: number,
     email: string,
     role: WorkspaceRole,
-    groupId: number,
   ): Observable<void> {
     return this.http.post<void>(`${this.apiUrl}/${workspaceId}/invites`, {
       email,
       role,
-      groupId,
     });
+  }
+
+  getAllWorkspacesAdmin(): Observable<Workspace[]> {
+    return this.http.get<Workspace[]>(this.adminApiUrl);
+  }
+
+  createTeamWorkspaceAdmin(name: string): Observable<Workspace> {
+    const params = new HttpParams().set('name', name);
+    return this.http.post<Workspace>(this.adminApiUrl, null, {params});
+  }
+
+  addUserToWorkspaceByEmail(
+    workspaceId: number,
+    email: string,
+  ): Observable<AddUserByEmailResponse> {
+    return this.http.post<AddUserByEmailResponse>(
+      `${this.adminApiUrl}/${workspaceId}/users/by-email`,
+      {email},
+    );
+  }
+
+  addAdminUserByEmail(email: string): Observable<AddUserByEmailResponse> {
+    return this.http.post<AddUserByEmailResponse>(
+      `${environment.backendURL}/admin/users/by-email`,
+      {email},
+    );
+  }
+
+  removeUserFromWorkspace(
+    workspaceId: number,
+    userId: number,
+  ): Observable<{message: string}> {
+    return this.http.delete<{message: string}>(
+      `${this.adminApiUrl}/${workspaceId}/users/${userId}`,
+    );
+  }
+
+  deleteTeamWorkspace(workspaceId: number): Observable<{message: string}> {
+    return this.http.delete<{message: string}>(
+      `${this.adminApiUrl}/${workspaceId}`,
+    );
   }
 }

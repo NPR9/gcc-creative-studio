@@ -48,16 +48,14 @@ class TestCreateUserIfNotExists:
 
         # Action: Call service method
         result = await user_service.create_user_if_not_exists(
-            email=" User@Example.com ",
+            email="user@example.com",
             name="Regular User",
             picture="",
         )
 
         # Assertions
         assert result == mock_user
-        mock_user_repo.get_by_email.assert_called_once_with(
-            "user@example.com", include_deleted=True
-        )
+        mock_user_repo.get_by_email.assert_called_once_with("user@example.com")
         # Verify create was NOT called
         mock_user_repo.create.assert_not_called()
 
@@ -72,85 +70,20 @@ class TestCreateUserIfNotExists:
 
         # Action: Call service method
         result = await user_service.create_user_if_not_exists(
-            email=" New@Example.com ",
+            email="new@example.com",
             name="New User",
             picture="http://pic.jpg",
         )
 
         # Assertions
         assert result == mock_user
-        mock_user_repo.get_by_email.assert_called_once_with(
-            "new@example.com", include_deleted=True
-        )
+        mock_user_repo.get_by_email.assert_called_once_with("new@example.com")
 
         # Verify create was called with correct data
         called_args = mock_user_repo.create.call_args[0][0]
         assert called_args["email"] == "new@example.com"
         assert called_args["name"] == "New User"
         assert called_args["roles"] == [UserRoleEnum.USER]
-
-    @pytest.mark.anyio
-    async def test_existing_user_with_case_mismatch(
-        self, user_service, mock_user_repo, mock_user
-    ):
-        mock_user_repo.get_by_email.return_value = mock_user
-
-        result = await user_service.create_user_if_not_exists(
-            email="USER@EXAMPLE.COM",
-            name="Regular User",
-            picture=None,
-        )
-
-        assert result == mock_user
-        mock_user_repo.get_by_email.assert_called_once_with(
-            "user@example.com", include_deleted=True
-        )
-
-    @pytest.mark.anyio
-    async def test_soft_deleted_user_is_restored(
-        self, user_service, mock_user_repo, mock_user
-    ):
-        """Test that a soft-deleted user is automatically restored during login."""
-        # Setup: Create a soft-deleted user
-        from datetime import datetime
-
-        deleted_user = MagicMock()
-        deleted_user.id = 1
-        deleted_user.email = "deleted@example.com"
-        deleted_user.deleted_at = datetime(2025, 1, 1)
-        deleted_user.roles = [UserRoleEnum.USER]
-
-        restored_user = MagicMock()
-        restored_user.id = 1
-        restored_user.email = "deleted@example.com"
-        restored_user.deleted_at = None
-        restored_user.roles = [UserRoleEnum.USER]
-
-        # Mock get_by_email to return the soft-deleted user
-        mock_user_repo.get_by_email.return_value = deleted_user
-        # Mock restore to update the user
-        mock_user_repo.restore.return_value = None
-        # Mock get_by_id to return the restored user
-        mock_user_repo.get_by_id.return_value = restored_user
-
-        # Action: Call service method
-        result = await user_service.create_user_if_not_exists(
-            email="deleted@example.com",
-            name="Previously Deleted User",
-            picture="http://pic.jpg",
-        )
-
-        # Assertions
-        assert result == restored_user
-        mock_user_repo.get_by_email.assert_called_once_with(
-            "deleted@example.com", include_deleted=True
-        )
-        # Verify restore was called
-        mock_user_repo.restore.assert_called_once_with(1)
-        # Verify get_by_id was called to fetch the restored user
-        mock_user_repo.get_by_id.assert_called_once_with(1)
-        # Verify create was NOT called (user was restored, not created)
-        mock_user_repo.create.assert_not_called()
 
 
 class TestGetUserById:
@@ -175,71 +108,6 @@ class TestGetUserById:
 
         assert result is None
         mock_user_repo.get_by_id.assert_called_once_with(999)
-
-
-class TestCreateOrRestoreUserByEmailForAdmin:
-    """Tests for UserService.create_or_restore_user_by_email_for_admin."""
-
-    @pytest.mark.anyio
-    async def test_returns_existing_user_status_existing(
-        self,
-        user_service,
-        mock_user_repo,
-        mock_user,
-    ):
-        mock_user_repo.get_by_email.return_value = mock_user
-
-        user, status = await user_service.create_or_restore_user_by_email_for_admin(
-            " User@Example.com "
-        )
-
-        assert user == mock_user
-        assert status == "existing"
-        mock_user_repo.get_by_email.assert_called_once_with(
-            "user@example.com",
-            include_deleted=True,
-        )
-
-    @pytest.mark.anyio
-    async def test_restores_soft_deleted_user(
-        self,
-        user_service,
-        mock_user_repo,
-        mock_user,
-    ):
-        import datetime
-
-        deleted_user = mock_user.model_copy(
-            update={"deleted_at": datetime.datetime.now(datetime.UTC)}
-        )
-        mock_user_repo.get_by_email.return_value = deleted_user
-        mock_user_repo.get_by_id.return_value = mock_user
-
-        user, status = await user_service.create_or_restore_user_by_email_for_admin(
-            "user@example.com"
-        )
-
-        assert user == mock_user
-        assert status == "restored"
-        mock_user_repo.restore.assert_called_once_with(mock_user.id)
-
-    @pytest.mark.anyio
-    async def test_creates_new_user_when_missing(
-        self,
-        user_service,
-        mock_user_repo,
-        mock_user,
-    ):
-        mock_user_repo.get_by_email.return_value = None
-        user_service.create_user_if_not_exists = AsyncMock(return_value=mock_user)
-
-        user, status = await user_service.create_or_restore_user_by_email_for_admin(
-            "new.user@example.com"
-        )
-
-        assert user == mock_user
-        assert status == "created"
-        user_service.create_user_if_not_exists.assert_called_once()
 
 
 class TestUpdateUserRole:

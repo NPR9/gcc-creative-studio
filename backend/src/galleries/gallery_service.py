@@ -123,6 +123,7 @@ class GalleryService:
             presigned_url=presigned_url,
             presigned_thumbnail_url=presigned_thumbnail_url,
             gcs_uri=asset_doc.gcs_uri,
+            mime_type=asset_doc.mime_type,
         )
 
     async def _enrich_source_media_item_link(
@@ -174,6 +175,7 @@ class GalleryService:
             presigned_url=presigned_url,
             presigned_thumbnail_url=presigned_thumbnail_url,
             gcs_uri=parent_gcs_uri,
+            mime_type=parent_item.mime_type,
         )
 
     async def _create_gallery_response(
@@ -208,7 +210,7 @@ class GalleryService:
             asyncio.to_thread(
                 self.iam_signer_credentials.generate_presigned_url, uri
             )
-            for uri in (item.thumbnail_uris or [])
+            for uri in (item.thumbnail_uris or "")
             if uri
         ]
 
@@ -278,19 +280,6 @@ class GalleryService:
         uris_to_sign = item.gcs_uris or []
         thumbnail_uris_to_sign = item.thumbnail_uris or []
 
-        # Log if we have no URIs to sign
-        if not uris_to_sign and not thumbnail_uris_to_sign:
-            logger.warning(
-                f"No URIs to sign for item {item.id} "
-                f"(type: {item.item_type}). "
-                f"gcs_uris: {item.gcs_uris}, "
-                f"thumbnail_uris: {item.thumbnail_uris}"
-            )
-            # Return early with empty arrays
-            item.presigned_urls = []
-            item.presigned_thumbnail_urls = []
-            return item
-
         # Create tasks
         url_tasks = [
             asyncio.to_thread(
@@ -308,23 +297,10 @@ class GalleryService:
             if uri
         ]
 
-        try:
-            (presigned_urls, presigned_thumbnail_urls) = await asyncio.gather(
-                asyncio.gather(*url_tasks),
-                asyncio.gather(*thumbnail_tasks),
-            )
-
-            # Log success for debugging
-            logger.info(
-                f"Generated {len(presigned_urls)} presigned URLs and "
-                f"{len(presigned_thumbnail_urls)} thumbnail URLs for item {item.id}"
-            )
-        except Exception as e:
-            logger.error(
-                f"Error generating presigned URLs for item {item.id}: {e}"
-            )
-            presigned_urls = []
-            presigned_thumbnail_urls = []
+        (presigned_urls, presigned_thumbnail_urls) = await asyncio.gather(
+            asyncio.gather(*url_tasks),
+            asyncio.gather(*thumbnail_tasks),
+        )
 
         item.presigned_urls = presigned_urls
         item.presigned_thumbnail_urls = presigned_thumbnail_urls
@@ -410,7 +386,12 @@ class GalleryService:
         bulk_delete_dto: BulkDeleteDto,
         current_user: UserModel,
     ) -> dict[str, int]:
-        """Deletes multiple gallery items after authorizing the workspace access."""
+        """Deletes gallery items after authorizing workspace access.
+
+        For media_item entries with image_index, only that image within the
+        generation set is removed. The whole media item is soft-deleted when
+        it is the last remaining image (or when image_index is omitted).
+        """
         # 1. Authorize workspace access
         await self.workspace_auth.authorize(
             workspace_id=bulk_delete_dto.workspace_id,
@@ -441,11 +422,13 @@ class GalleryService:
                         )
                         continue
 
-                    await self.media_repo.soft_delete(
-                        item.id,
+                    removed = await self._delete_media_item_or_image(
+                        media_item=media_item,
+                        image_index=item.image_index,
                         deleted_by=current_user.id,
                     )
-                    deleted_count += 1
+                    if removed:
+                        deleted_count += 1
                 elif item.type == "source_asset":
                     asset = await self.source_asset_repo.get_by_id(item.id)
                     if not asset:
@@ -476,6 +459,59 @@ class GalleryService:
                 logger.error(f"Error deleting {item.type} {item.id}: {e}")
 
         return {"deleted_count": deleted_count}
+
+    async def _delete_media_item_or_image(
+        self,
+        media_item,
+        image_index: int | None,
+        deleted_by: int,
+    ) -> bool:
+        """Soft-delete whole item, or remove one image from a multi-image set."""
+        gcs_uris = list(media_item.gcs_uris or [])
+
+        # No index / single image / empty → delete the whole media item.
+        if (
+            image_index is None
+            or len(gcs_uris) <= 1
+            or image_index < 0
+            or image_index >= len(gcs_uris)
+        ):
+            if image_index is not None and len(gcs_uris) > 1 and (
+                image_index < 0 or image_index >= len(gcs_uris)
+            ):
+                logger.warning(
+                    "Invalid image_index %s for media_item %s (uris=%s)",
+                    image_index,
+                    media_item.id,
+                    len(gcs_uris),
+                )
+                return False
+            return await self.media_repo.soft_delete(
+                media_item.id,
+                deleted_by=deleted_by,
+            )
+
+        gcs_uris.pop(image_index)
+
+        thumbnail_uris = list(media_item.thumbnail_uris or [])
+        if image_index < len(thumbnail_uris):
+            thumbnail_uris.pop(image_index)
+
+        update_data: dict = {
+            "gcs_uris": gcs_uris,
+            "thumbnail_uris": thumbnail_uris,
+            "num_media": len(gcs_uris),
+        }
+
+        original_gcs_uris = media_item.original_gcs_uris
+        if original_gcs_uris is not None:
+            originals = list(original_gcs_uris)
+            if image_index < len(originals):
+                originals.pop(image_index)
+            update_data["original_gcs_uris"] = originals
+
+        updated = await self.media_repo.update(media_item.id, update_data)
+        return updated is not None
 
     async def restore_item(
         self,
@@ -687,11 +723,13 @@ class GalleryService:
                             "deleted_at",
                             "deleted_by",
                             "workspace_id",
+                            "source_media_item_id",
                         },
                     )
                     new_item_data["workspace_id"] = (
                         bulk_copy_dto.target_workspace_id
                     )
+                    new_item_data["source_media_item_id"] = media_item.id
 
                     # Ensure user_id and user_email are set to the current user copying
                     new_item_data["user_id"] = current_user.id

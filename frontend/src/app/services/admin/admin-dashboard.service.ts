@@ -15,7 +15,7 @@
 */
 
 import {Injectable} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import {HttpClient, HttpParams} from '@angular/common/http';
 import {Observable} from 'rxjs';
 import {map} from 'rxjs/operators';
 import {environment} from '../../../environments/environment';
@@ -62,6 +62,35 @@ export interface AdminGenerationHealth {
 export interface AdminMonthlyActiveUsers {
   month: string;
   count: number;
+}
+
+export interface UserUsageCostRow {
+  userEmail: string;
+  eventCount: number;
+  totalPromptTokens: number;
+  totalCandidatesTokens: number;
+  totalThoughtsTokens: number;
+  totalMediaCount: number;
+  estimatedCostUsd: number;
+}
+
+export interface WorkspaceUsageCostResponse {
+  workspaceId: number;
+  workspaceName: string;
+  workspaceScope: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  totalEstimatedCostUsd: number;
+  users: UserUsageCostRow[];
+}
+
+export interface UnitPriceRow {
+  id: number;
+  model: string;
+  unitType: string;
+  unitPriceUsd: number;
+  currency: string;
+  notes?: string | null;
 }
 
 @Injectable({
@@ -155,5 +184,27 @@ export class AdminDashboardService {
       `${this.baseUrl}/cleanup-stuck-jobs`,
       {},
     );
+  }
+
+  getUsageCostByWorkspace(
+    workspaceId: number,
+    startDate?: string,
+    endDate?: string,
+  ): Observable<WorkspaceUsageCostResponse> {
+    let params = new HttpParams().set('workspace_id', workspaceId.toString());
+    if (startDate) {
+      params = params.set('start_date', startDate);
+    }
+    if (endDate) {
+      params = params.set('end_date', endDate);
+    }
+    return this.http.get<WorkspaceUsageCostResponse>(
+      `${this.baseUrl}/usage/cost-by-workspace`,
+      {params},
+    );
+  }
+
+  getUnitPrices(): Observable<UnitPriceRow[]> {
+    return this.http.get<UnitPriceRow[]>(`${this.baseUrl}/usage/unit-prices`);
   }
 }

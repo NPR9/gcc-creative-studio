@@ -45,9 +45,9 @@ async def generate_videos(
     workspace_auth: WorkspaceAuth = Depends(),
 ) -> MediaItemResponse | None:
     try:
-        # Use our centralized dependency to authorize the user for the workspace
+        # Content creation is pinned to the caller's personal workspace
         # before proceeding with the expensive generation job.
-        await workspace_auth.authorize(
+        await workspace_auth.authorize_personal_workspace(
             workspace_id=video_request.workspace_id,
             user=current_user,
         )
@@ -90,7 +90,7 @@ async def concatenate_videos(
     This is an asynchronous operation that returns a placeholder immediately.
     """
     try:
-        await workspace_auth.authorize(
+        await workspace_auth.authorize_personal_workspace(
             workspace_id=concat_request.workspace_id,
             user=current_user,
         )

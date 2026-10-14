@@ -50,6 +50,7 @@ export class GalleryService implements OnDestroy {
   private pageSize = 40;
   private allFetchedImages: GalleryItem[] = [];
   private filters$ = new BehaviorSubject<GallerySearchDto | null>(null);
+  private overrideWorkspaceId$ = new BehaviorSubject<number | null>(null);
   private dataLoadingSubscription: Subscription;
 
   constructor(
@@ -58,17 +59,19 @@ export class GalleryService implements OnDestroy {
   ) {
     this.dataLoadingSubscription = combineLatest([
       this.workspaceStateService.activeWorkspaceId$,
+      this.overrideWorkspaceId$,
       this.filters$,
     ])
       .pipe(
         debounceTime(50),
-        switchMap(([workspaceId, filters]) => {
+        switchMap(([activeWorkspaceId, overrideWorkspaceId, filters]) => {
           if (!filters) {
             return of(null);
           }
           this.isLoading$.next(true);
           this.resetCache();
 
+          const workspaceId = overrideWorkspaceId ?? activeWorkspaceId;
           const body: GallerySearchDto = {
             ...filters,
             workspaceId: workspaceId || undefined,
@@ -107,6 +110,21 @@ export class GalleryService implements OnDestroy {
     this.filters$.next(filters);
   }
 
+  /**
+   * Overrides the workspace used for gallery searches (e.g. the Shared
+   * Gallery view). Pass null to restore the active (personal) workspace.
+   */
+  setOverrideWorkspaceId(workspaceId: number | null) {
+    this.overrideWorkspaceId$.next(workspaceId);
+  }
+
+  private getEffectiveWorkspaceId(): number | null {
+    return (
+      this.overrideWorkspaceId$.getValue() ??
+      this.workspaceStateService.getActiveWorkspaceId()
+    );
+  }
+
   loadGallery(reset = false): void {
     if (this.isLoading$.value) {
       return;
@@ -122,8 +140,7 @@ export class GalleryService implements OnDestroy {
 
     const body: GallerySearchDto = {
       ...this.filters$.value,
-      workspaceId:
-        this.workspaceStateService.getActiveWorkspaceId() || undefined,
+      workspaceId: this.getEffectiveWorkspaceId() || undefined,
       offset: this.currentPage * this.pageSize,
       limit: this.pageSize,
     };
@@ -338,12 +355,16 @@ export class GalleryService implements OnDestroy {
   }
 
   bulkDelete(
-    items: {id: number; type: string}[],
+    items: {id: number; type: string; imageIndex?: number | null}[],
     workspaceId: number,
   ): Observable<{deleted_count: number}> {
     const url = `${environment.backendURL}/gallery/bulk-delete`;
     return this.http.post<{deleted_count: number}>(url, {
-      items,
+      items: items.map(item => ({
+        id: item.id,
+        type: item.type,
+        image_index: item.imageIndex ?? null,
+      })),
       workspace_id: workspaceId,
     });
   }
@@ -369,6 +390,17 @@ export class GalleryService implements OnDestroy {
       items,
       target_workspace_id: targetWorkspaceId,
     });
+  }
+
+  /**
+   * Shares items into the caller's assigned shared (team) workspace. The
+   * backend resolves the target workspace and creates independent copies.
+   */
+  shareToSharedWorkspace(
+    items: {id: number; type: string}[],
+  ): Observable<{copied_count: number}> {
+    const url = `${environment.backendURL}/gallery/share`;
+    return this.http.post<{copied_count: number}>(url, {items});
   }
 
   restoreMediaItem(id: number, itemType: string): Observable<any> {

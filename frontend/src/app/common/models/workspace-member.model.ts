@@ -15,14 +15,13 @@
  */
 
 export enum WorkspaceRole {
-  VIEWER = 'viewer',
-  EDITOR = 'editor',
+  USER = 'user',
   ADMIN = 'admin',
-  OWNER = 'owner',
 }
 
 export interface WorkspaceMember {
-  userId: string;
+  userId: number;
   email: string;
+  name?: string;
   role: WorkspaceRole;
 }

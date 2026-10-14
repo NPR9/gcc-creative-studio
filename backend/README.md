@@ -20,7 +20,7 @@ The backend follows a **Modular, Feature-Driven Architecture**, heavily inspired
 | **Backend** | Python, FastAPI, Pydantic |
 | **Database** | Google Cloud SQL (PostgreSQL) |
 | **Cloud Provider** | Google Cloud Platform (GCP) |
-| **Deployment** | Cloud Run (for backend), Firebase Hosting (for frontend) |
+| **Deployment** | Cloud Run (frontend + backend), IAP for login |
 | **AI Models** | Imagen, Veo, Gemini (via Vertex AI SDK) |
 
 ## 🚀 Backend Setup

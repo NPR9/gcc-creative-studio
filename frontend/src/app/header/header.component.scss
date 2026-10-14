@@ -28,20 +28,6 @@
 }
 // --- End: Mobile Fix ---
 
-.avatar-fallback {
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #5e99ff 0%, #8b5cf6 100%);
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
 .mat-menu-floating {
   // Mobile styles
   bottom: 2.5vh;

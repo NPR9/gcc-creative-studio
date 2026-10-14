@@ -24,18 +24,14 @@ import {
 } from '@angular/core';
 import {MatTableDataSource} from '@angular/material/table';
 import {MatSort} from '@angular/material/sort';
-import {Subject, firstValueFrom} from 'rxjs';
+import {Subject} from 'rxjs';
 import {debounceTime, distinctUntilChanged, takeUntil} from 'rxjs/operators';
 import {isPlatformBrowser} from '@angular/common';
-import {UserService} from './user.service';
 import {MatDialog} from '@angular/material/dialog';
-import {UserFormComponent} from './user-form.component';
 import {MatSnackBar} from '@angular/material/snack-bar';
-import {UserModel} from '../../common/models/user.model';
-import {Group, GroupMember} from '../../common/models/group.model';
-import {GroupService} from '../../services/group/group.service';
-import {CreateGroupDialogComponent} from '../groups-management/create-group-dialog/create-group-dialog.component';
-import {AddMemberDialogComponent} from '../groups-management/add-member-dialog/add-member-dialog.component';
+import {Workspace, WorkspaceType} from '../../common/models/workspace.model';
+import {WorkspaceMember} from '../../common/models/workspace-member.model';
+import {WorkspaceService} from '../../services/workspace/workspace.service';
 import {
   AddUserDialogComponent,
   AddUserDialogResult,
@@ -45,23 +41,19 @@ import {
   handleSuccessSnackbar,
 } from '../../utils/handleMessageSnackbar';
 import {ConfirmationDialogComponent} from '../../common/components/confirmation-dialog/confirmation-dialog.component';
+import {CreateTeamWorkspaceDialogComponent} from './create-team-workspace-dialog.component';
 
-// Tree node interface for hierarchical display
 interface TreeNode {
-  type: 'group' | 'member';
+  type: 'workspace' | 'member';
   level: number;
   expandable: boolean;
   isExpanded?: boolean;
-  
-  // Group properties
-  groupId?: number;
-  groupName?: string;
-  countryCode?: string;
+  workspaceId?: number;
+  workspaceName?: string;
+  workspaceType?: WorkspaceType;
   memberCount?: number;
-  
-  // Member properties
-  member?: GroupMember;
-  parentGroupId?: number;
+  member?: WorkspaceMember;
+  parentWorkspaceId?: number;
 }
 
 @Component({
@@ -74,28 +66,27 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
     'expand',
     'name',
     'email',
-    'roles',
     'createdAt',
     'actions',
   ];
   dataSource: MatTableDataSource<TreeNode> = new MatTableDataSource<TreeNode>();
   isLoading = true;
   errorLoadingUsers: string | null = null;
-  groups: Group[] = [];
-  expandedGroupIds = new Set<number>();
+  workspaces: Workspace[] = [];
+  expandedWorkspaceIds = new Set<number>();
   currentUserId: number | null = null;
 
-  // --- Filtering & Destroy State ---
   private filterSubject = new Subject<string>();
   private destroy$ = new Subject<void>();
   currentFilter = '';
-  selectedGroupId: number | null = null;
+  selectedWorkspaceId: number | null = null;
+
+  readonly WorkspaceType = WorkspaceType;
 
   @ViewChild(MatSort) sort!: MatSort;
 
   constructor(
-    private userService: UserService,
-    private groupService: GroupService,
+    private workspaceService: WorkspaceService,
     public dialog: MatDialog,
     private _snackBar: MatSnackBar,
     @Inject(PLATFORM_ID) private platformId: Object,
@@ -107,10 +98,9 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
       if (userDetailsStr) {
         this.currentUserId = JSON.parse(userDetailsStr).id || null;
       }
-      this.loadGroups();
+      this.loadWorkspaces();
     }
 
-    // Debounce filter input
     this.filterSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
       .subscribe(filterValue => {
@@ -124,70 +114,43 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  loadGroups(): void {
+  loadWorkspaces(): void {
     this.isLoading = true;
     this.errorLoadingUsers = null;
-    
-    this.groupService.getAllGroups().subscribe({
-      next: (groups: Group[]) => {
-        this.groups = groups;
+
+    this.workspaceService.getAllWorkspacesAdmin().subscribe({
+      next: (workspaces: Workspace[]) => {
+        this.workspaces = workspaces.filter(
+          ws =>
+            ws.type === WorkspaceType.TEAM ||
+            ws.type === WorkspaceType.ADMIN,
+        );
         this.buildTreeData();
         this.isLoading = false;
       },
-      error: (err: any) => {
-        this.errorLoadingUsers = 'Failed to load groups and users.';
-        console.error('Error loading groups:', err);
+      error: (err: unknown) => {
+        this.errorLoadingUsers = 'Failed to load workspaces and users.';
+        console.error('Error loading workspaces:', err);
         this.isLoading = false;
       },
     });
   }
 
   buildTreeData(): void {
-    const treeNodes: TreeNode[] = [];
-    
-    for (const group of this.groups) {
-      // Add group node
-      const groupNode: TreeNode = {
-        type: 'group',
-        level: 0,
-        expandable: true,
-        isExpanded: this.expandedGroupIds.has(group.id),
-        groupId: group.id,
-        groupName: group.name,
-        countryCode: group.countryCode,
-        memberCount: group.members?.length || 0,
-      };
-      treeNodes.push(groupNode);
-      
-      // Add member nodes if group is expanded
-      if (this.expandedGroupIds.has(group.id) && group.members) {
-        for (const member of group.members) {
-          const memberNode: TreeNode = {
-            type: 'member',
-            level: 1,
-            expandable: false,
-            member: member,
-            parentGroupId: group.id,
-          };
-          treeNodes.push(memberNode);
-        }
-      }
-    }
-    
-    this.dataSource.data = treeNodes;
+    this.applyFilterToTree();
   }
 
-  toggleGroup(groupId: number): void {
-    if (this.expandedGroupIds.has(groupId)) {
-      this.expandedGroupIds.delete(groupId);
+  toggleWorkspace(workspaceId: number): void {
+    if (this.expandedWorkspaceIds.has(workspaceId)) {
+      this.expandedWorkspaceIds.delete(workspaceId);
     } else {
-      this.expandedGroupIds.add(groupId);
+      this.expandedWorkspaceIds.add(workspaceId);
     }
     this.buildTreeData();
   }
 
-  isGroupExpanded(groupId: number): boolean {
-    return this.expandedGroupIds.has(groupId);
+  isWorkspaceExpanded(workspaceId: number): boolean {
+    return this.expandedWorkspaceIds.has(workspaceId);
   }
 
   applyFilter(event: Event): void {
@@ -196,33 +159,32 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
   }
 
   applyFilterToTree(): void {
-    const visibleGroups = this.selectedGroupId
-      ? this.groups.filter(group => group.id === this.selectedGroupId)
-      : this.groups;
+    const visibleWorkspaces = this.selectedWorkspaceId
+      ? this.workspaces.filter(ws => ws.id === this.selectedWorkspaceId)
+      : this.workspaces;
 
     if (!this.currentFilter) {
       const treeNodes: TreeNode[] = [];
-      for (const group of visibleGroups) {
-        const groupNode: TreeNode = {
-          type: 'group',
+      for (const workspace of visibleWorkspaces) {
+        treeNodes.push({
+          type: 'workspace',
           level: 0,
           expandable: true,
-          isExpanded: this.expandedGroupIds.has(group.id),
-          groupId: group.id,
-          groupName: group.name,
-          countryCode: group.countryCode,
-          memberCount: group.members?.length || 0,
-        };
-        treeNodes.push(groupNode);
+          isExpanded: this.expandedWorkspaceIds.has(workspace.id),
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspaceType: workspace.type,
+          memberCount: workspace.members?.length || 0,
+        });
 
-        if (this.expandedGroupIds.has(group.id) && group.members) {
-          for (const member of group.members) {
+        if (this.expandedWorkspaceIds.has(workspace.id) && workspace.members) {
+          for (const member of workspace.members) {
             treeNodes.push({
               type: 'member',
               level: 1,
               expandable: false,
               member,
-              parentGroupId: group.id,
+              parentWorkspaceId: workspace.id,
             });
           }
         }
@@ -234,157 +196,116 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
     const filter = this.currentFilter.toLowerCase();
     const treeNodes: TreeNode[] = [];
 
-    for (const group of visibleGroups) {
-      const matchingMembers = group.members?.filter(member => 
-        member.email.toLowerCase().includes(filter) ||
-        member.name.toLowerCase().includes(filter)
-      ) || [];
-      
-      // Show group if it has matching members or if group name matches
-      if (matchingMembers.length > 0 || group.name.toLowerCase().includes(filter)) {
-        const groupNode: TreeNode = {
-          type: 'group',
+    for (const workspace of visibleWorkspaces) {
+      const matchingMembers =
+        workspace.members?.filter(
+          member =>
+            member.email.toLowerCase().includes(filter) ||
+            (member.name || '').toLowerCase().includes(filter),
+        ) || [];
+
+      if (
+        matchingMembers.length > 0 ||
+        workspace.name.toLowerCase().includes(filter)
+      ) {
+        treeNodes.push({
+          type: 'workspace',
           level: 0,
           expandable: true,
-          isExpanded: true, // Auto-expand when filtering
-          groupId: group.id,
-          groupName: group.name,
-          countryCode: group.countryCode,
+          isExpanded: true,
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          workspaceType: workspace.type,
           memberCount: matchingMembers.length,
-        };
-        treeNodes.push(groupNode);
-        
-        // Add matching members
+        });
+
         for (const member of matchingMembers) {
-          const memberNode: TreeNode = {
+          treeNodes.push({
             type: 'member',
             level: 1,
             expandable: false,
-            member: member,
-            parentGroupId: group.id,
-          };
-          treeNodes.push(memberNode);
+            member,
+            parentWorkspaceId: workspace.id,
+          });
         }
       }
     }
-    
+
     this.dataSource.data = treeNodes;
   }
 
-  applyGroupFilter(groupId: string): void {
-    this.selectedGroupId = groupId ? Number(groupId) : null;
+  applyWorkspaceFilter(workspaceId: string): void {
+    this.selectedWorkspaceId = workspaceId ? Number(workspaceId) : null;
     this.applyFilterToTree();
   }
 
-  openUserForm(member: GroupMember): void {
-    // Fetch full user details first
-    this.userService.getUser(member.userId).subscribe({
-      next: (user: UserModel) => {
-        const dialogRef = this.dialog.open(UserFormComponent, {
-          width: '450px',
-          data: {user: user, isEditMode: true},
-        });
+  deleteWorkspace(workspaceId: number, workspaceName: string, workspaceType: WorkspaceType): void {
+    if (workspaceType === WorkspaceType.PERSONAL) {
+      handleErrorSnackbar(
+        this._snackBar,
+        {message: 'Personal workspaces cannot be deleted.'},
+        'Delete workspace',
+      );
+      return;
+    }
 
-        dialogRef
-          .afterClosed()
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(async (result: UserModel | undefined) => {
-            if (result) {
-              this.isLoading = true;
-              try {
-                await firstValueFrom(this.userService.updateUser(result));
-                handleSuccessSnackbar(this._snackBar, 'User updated successfully!');
-                this.loadGroups();
-              } catch (err) {
-                console.error('Error updating user:', err);
-                handleErrorSnackbar(this._snackBar, err, 'Update user');
-              } finally {
-                this.isLoading = false;
-              }
-            }
-          });
-      },
-      error: (err: any) => {
-        console.error('Error fetching user:', err);
-        handleErrorSnackbar(this._snackBar, err, 'Fetch user');
-      },
-    });
-  }
+    if (workspaceType === WorkspaceType.ADMIN) {
+      handleErrorSnackbar(
+        this._snackBar,
+        {message: 'The Administrators workspace cannot be deleted.'},
+        'Delete workspace',
+      );
+      return;
+    }
 
-  deleteUser(userId: number): void {
     const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
       width: '400px',
       data: {
-        title: 'Confirm Deletion',
-        message: `Are you sure you want to delete user with ID: ${userId}?`,
+        title: 'Confirm Workspace Deletion',
+        message: `Are you sure you want to delete the team workspace "${workspaceName}"?`,
       },
     });
 
-    dialogRef.afterClosed().subscribe(async (result: any) => {
-      if (result) {
-        this.isLoading = true;
-        try {
-          await firstValueFrom(this.userService.deleteUser(userId));
-          handleSuccessSnackbar(this._snackBar, 'User deleted successfully!');
-          this.loadGroups();
-        } catch (err) {
-          console.error(`Error deleting user ${userId}:`, err);
-          handleErrorSnackbar(this._snackBar, err, 'Delete user');
-        } finally {
+    dialogRef.afterClosed().subscribe((result: unknown) => {
+      if (!result) return;
+
+      this.isLoading = true;
+      this.workspaceService.deleteTeamWorkspace(workspaceId).subscribe({
+        next: () => {
+          handleSuccessSnackbar(
+            this._snackBar,
+            `Workspace "${workspaceName}" deleted successfully!`,
+          );
+          this.expandedWorkspaceIds.delete(workspaceId);
+          this.loadWorkspaces();
+        },
+        error: err => {
+          handleErrorSnackbar(this._snackBar, err, 'Delete workspace');
           this.isLoading = false;
-        }
-      }
+        },
+      });
     });
   }
 
-  deleteGroup(groupId: number, groupName: string): void {
-    const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
-      width: '400px',
-      data: {
-        title: 'Confirm Group Deletion',
-        message: `Are you sure you want to delete the group "${groupName}"? This will remove all group members and cannot be undone.`,
-      },
-    });
-
-    dialogRef.afterClosed().subscribe(async (result: any) => {
-      if (result) {
-        this.isLoading = true;
-        try {
-          await firstValueFrom(this.groupService.deleteGroupAdmin(groupId));
-          handleSuccessSnackbar(this._snackBar, `Group "${groupName}" deleted successfully!`);
-          // Remove from expanded set if it was expanded
-          this.expandedGroupIds.delete(groupId);
-          this.loadGroups();
-        } catch (err) {
-          console.error(`Error deleting group ${groupId}:`, err);
-          handleErrorSnackbar(this._snackBar, err, 'Delete group');
-        } finally {
-          this.isLoading = false;
-        }
-      }
-    });
-  }
-
-  openCreateGroupDialog(): void {
-    const dialogRef = this.dialog.open(CreateGroupDialogComponent, {
+  openCreateTeamWorkspaceDialog(): void {
+    const dialogRef = this.dialog.open(CreateTeamWorkspaceDialogComponent, {
       width: '500px',
     });
 
-    dialogRef.afterClosed().subscribe((result: any) => {
-      if (result && result.name) {
+    dialogRef.afterClosed().subscribe((result: {name: string} | undefined) => {
+      if (result?.name) {
         this.isLoading = true;
-        
-        // Actually create the group via API
-        this.groupService.createGroupAdmin(result.name, result.countryCode).subscribe({
-          next: (createdGroup: Group) => {
-            handleSuccessSnackbar(this._snackBar, `Group "${createdGroup.name}" created successfully!`);
-            // Auto-expand the newly created group so admin can add members immediately
-            this.expandedGroupIds.add(createdGroup.id);
-            this.loadGroups(); // Refresh the tree to show the new group
+        this.workspaceService.createTeamWorkspaceAdmin(result.name).subscribe({
+          next: created => {
+            handleSuccessSnackbar(
+              this._snackBar,
+              `Team workspace "${created.name}" created successfully!`,
+            );
+            this.expandedWorkspaceIds.add(created.id);
+            this.loadWorkspaces();
           },
-          error: (err: any) => {
-            console.error('Error creating group:', err);
-            handleErrorSnackbar(this._snackBar, err, 'Failed to create group');
+          error: err => {
+            handleErrorSnackbar(this._snackBar, err, 'Failed to create workspace');
             this.isLoading = false;
           },
         });
@@ -392,52 +313,70 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  openAddUserToGroupDialog(member: GroupMember): void {
-    // Create a temporary user object for the dialog
-    const tempUser: any = {
-      id: member.userId,
-      email: member.email,
-      name: member.name,
-    };
-    
-    const dialogRef = this.dialog.open(AddMemberDialogComponent, {
-      width: '500px',
-      data: {preselectedUser: tempUser},
-    });
-
-    dialogRef.afterClosed().subscribe((result: any) => {
-      if (result) {
-        handleSuccessSnackbar(
-          this._snackBar,
-          'User added to group successfully!',
-        );
-        this.loadGroups(); // Refresh the tree
-      }
-    });
-  }
-
   openAddUserDialog(): void {
+    const teamWorkspaces = this.workspaces.filter(
+      ws => ws.type === WorkspaceType.TEAM,
+    );
     const dialogRef = this.dialog.open(AddUserDialogComponent, {
       width: '500px',
-      data: {groups: this.groups},
+      data: {workspaces: teamWorkspaces},
     });
 
     dialogRef.afterClosed().subscribe((result: AddUserDialogResult | undefined) => {
-      if (result) {
-        this.isLoading = true;
-        this.groupService
-          .addUserToGroupByEmail(result.groupId, result.email)
-          .subscribe({
-            next: () => {
-              handleSuccessSnackbar(this._snackBar, 'User added to group successfully!');
-              this.loadGroups();
-            },
-            error: err => {
-              this.isLoading = false;
-              handleErrorSnackbar(this._snackBar, err, 'Add user to group');
-            },
-          });
-      }
+      if (!result) return;
+
+      this.isLoading = true;
+      const request$ = result.isAdmin
+        ? this.workspaceService.addAdminUserByEmail(result.email)
+        : this.workspaceService.addUserToWorkspaceByEmail(
+            result.workspaceId!,
+            result.email,
+          );
+
+      request$.subscribe({
+        next: () => {
+          handleSuccessSnackbar(
+            this._snackBar,
+            result.isAdmin
+              ? 'Admin user added successfully!'
+              : 'User added to workspace successfully!',
+          );
+          this.loadWorkspaces();
+        },
+        error: err => {
+          this.isLoading = false;
+          handleErrorSnackbar(this._snackBar, err, 'Add user');
+        },
+      });
+    });
+  }
+
+  removeMemberFromWorkspace(node: TreeNode): void {
+    if (!node.member || !node.parentWorkspaceId) return;
+
+    const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
+      width: '400px',
+      data: {
+        title: 'Remove User',
+        message: `Remove ${node.member.email} from this workspace?`,
+      },
+    });
+
+    dialogRef.afterClosed().subscribe((confirmed: unknown) => {
+      if (!confirmed) return;
+
+      this.workspaceService
+        .removeUserFromWorkspace(node.parentWorkspaceId!, node.member!.userId)
+        .subscribe({
+          next: () => {
+            handleSuccessSnackbar(
+              this._snackBar,
+              'Member removed from workspace.',
+            );
+            this.loadWorkspaces();
+          },
+          error: err => handleErrorSnackbar(this._snackBar, err, 'Remove member'),
+        });
     });
   }
 }

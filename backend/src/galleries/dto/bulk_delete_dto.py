@@ -13,12 +13,14 @@
 # limitations under the License.
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BulkDeleteItemDto(BaseModel):
     id: int
     type: str
+    # When set for media_item, delete only that image within the generation set.
+    image_index: int | None = Field(default=None, ge=0)
 
 
 class BulkDeleteDto(BaseModel):

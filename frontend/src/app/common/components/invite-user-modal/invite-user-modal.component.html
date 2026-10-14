@@ -19,7 +19,6 @@
 </h1>
 <form [formGroup]="inviteForm" (ngSubmit)="dialogRef.close(inviteForm.value)">
   <div mat-dialog-content class="flex flex-col gap-4">
-    <!-- Email Field -->
     <mat-form-field appearance="fill">
       <mat-label>Email</mat-label>
       <input matInput formControlName="email" type="email" cdkFocusInitial />
@@ -31,12 +30,11 @@
       >
     </mat-form-field>
 
-    <!-- Workspace Selector (Admin Mode Only) -->
     <mat-form-field appearance="fill" *ngIf="data.adminMode">
       <mat-label>Workspace</mat-label>
       <mat-select formControlName="workspaceId">
         <mat-option *ngFor="let workspace of workspaces" [value]="workspace.id">
-          {{ workspace.name }}
+          {{ workspace.name }} ({{ workspace.type }})
         </mat-option>
       </mat-select>
       <mat-error *ngIf="inviteForm.get('workspaceId')?.hasError('required')"
@@ -44,7 +42,6 @@
       >
     </mat-form-field>
 
-    <!-- Role Field -->
     <mat-form-field appearance="fill">
       <mat-label>Workspace Role</mat-label>
       <mat-select formControlName="role">
@@ -52,19 +49,6 @@
           role | titlecase
         }}</mat-option>
       </mat-select>
-    </mat-form-field>
-
-    <!-- Group Selector (Always Required) -->
-    <mat-form-field appearance="fill">
-      <mat-label>Group</mat-label>
-      <mat-select formControlName="groupId">
-        <mat-option *ngFor="let group of groups" [value]="group.id">
-          {{ group.name }} ({{ group.countryCode || 'No country' }})
-        </mat-option>
-      </mat-select>
-      <mat-error *ngIf="inviteForm.get('groupId')?.hasError('required')"
-        >Group is required</mat-error
-      >
     </mat-form-field>
 
     <mat-progress-spinner

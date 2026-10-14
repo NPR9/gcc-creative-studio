@@ -31,14 +31,14 @@
     class="user-profile-button cursor-pointer !w-14 !h-14 bg-blend-soft-light bg-white/40 !rounded-full shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] backdrop-blur-2xl inline-flex justify-center items-center gap-2.5 overflow-hidden !aspect-square"
   >
     <img
-      *ngIf="currentUser?.picture && !avatarLoadFailed; else placeholder"
+      *ngIf="currentUser?.picture; else placeholder"
       [src]="currentUser?.picture"
-      (error)="onAvatarLoadError()"
       alt="User profile"
+      referrerpolicy="no-referrer"
       class="!w-14 !h-14 object-cover rounded-full"
     />
     <ng-template #placeholder>
-      <div class="avatar-fallback">{{ avatarFallbackText }}</div>
+      <mat-icon class="m-auto">account_circle</mat-icon>
     </ng-template>
   </div>
 
@@ -121,7 +121,10 @@
         class="cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden transition-colors duration-200"
       >
         <div
-          class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
+          *ngIf="router.isActive('/fun-templates', true) || router.isActive('/vto', false)"
+          class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
+        ></div>
+        <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
           <button
             matFab
             aria-label="Tools"
@@ -141,6 +144,37 @@
       >
         <div class="absolute -left-[20px] top-0 bottom-0 w-[20px] bg-transparent"></div>
 
+        <div
+          routerLink="/vto"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+        >
+          <div
+            *ngIf="router.isActive('/vto', false)"
+             class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+          ></div>
+
+          <div class="relative flex items-center px-4 w-full z-10">
+             <mat-icon class="text-neutral-200 mr-3">checkroom</mat-icon>
+             <span class="text-neutral-200 font-medium text-sm whitespace-nowrap">Virtual Try-On</span>
+          </div>
+        </div>
+
+        <div
+          routerLink="/fun-templates"
+          class="cursor-pointer w-full h-12 bg-blend-soft-light bg-white/40 rounded-xl shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl relative overflow-hidden flex items-center group hover:bg-white/50 transition-all"
+        >
+          <div
+            *ngIf="router.isActive('/fun-templates', true)"
+            class="absolute inset-0 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 opacity-80 blur-[3px] backdrop-blur-md"
+          ></div>
+
+          <div class="relative flex items-center px-4 w-full z-10">
+             <mat-icon svgIcon="fun-templates-icon" class="text-neutral-200 mr-3"></mat-icon>
+             <span class="text-neutral-200 font-medium text-sm whitespace-nowrap">Fun Templates</span>
+          </div>
+        </div>
+        
+        
         <div
           *ngIf="authService.isUserAdmin() || authService.isUserWorkflows()"
           routerLink="/workflows"
@@ -201,26 +235,28 @@
       </div>
     </div>
 
+
     <div
-      routerLink="/groups"
-      matTooltip="Group Gallery"
+      routerLink="/shared-gallery"
+      matTooltip="Shared Gallery"
       matTooltipPosition="right"
       class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
     >
       <div
-        *ngIf="router.isActive('/groups', false)"
+        *ngIf="router.isActive('/shared-gallery', false)"
         class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
       ></div>
       <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
         <button
           matFab
-          aria-label="Group Gallery"
+          aria-label="Shared Gallery"
           class="cursor-pointer w-6 h-6 left-0 top-0 absolute text-center justify-center text-neutral-200 text-2xl"
         >
-          <mat-icon>group</mat-icon>
+          <mat-icon>folder_shared</mat-icon>
         </button>
       </div>
     </div>
+
 
     <div
       routerLink="/workbench"
@@ -239,30 +275,10 @@
           class="cursor-pointer w-6 h-6 left-0 top-0 absolute text-center justify-center text-neutral-200 text-2xl"
         >
         <mat-icon>construction</mat-icon>
+        <!-- <mat-icon>build</mat-icon> -->
         </button>
       </div>
     </div>
-
-<!-- <div
-      routerLink="/projects"
-      matTooltip="Projects"
-      matTooltipPosition="right"
-      class="md:mb-[10px] cursor-pointer w-14 h-14 bg-blend-soft-light bg-white/40 rounded-[48px] shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-2xl inline-flex justify-start items-start gap-2.5 overflow-hidden"
-    >
-       <div
-        *ngIf="router.isActive('/projects', true)"
-        class="flex-1 h-14 bg-gradient-to-r from-blue-500 via-violet-500 to-red-400 rounded-full blur-[3px] backdrop-blur-md"
-      ></div>
-      <div class="w-6 h-6 left-[16px] top-[16px] absolute overflow-hidden">
-        <button
-          matFab
-          aria-label="projects"
-          class="cursor-pointer w-6 h-6 left-0 top-0 absolute text-center justify-center text-neutral-200 text-2xl"
-        >
-        <mat-icon>folder</mat-icon>
-        </button>
-      </div>
-    </div> -->
 
     <div
       routerLink="/admin"

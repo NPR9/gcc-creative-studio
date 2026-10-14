@@ -177,7 +177,7 @@ async def test_create_template_from_media_item_success(service):
     service.mock_gemini_service.generate_structured_prompt.return_value = '{"name": "Catchy Dog", "description": "A dog", "industry": "Automotive", "brand": "BrandX", "tags": ["dog"]}'
 
     mock_workspace = MagicMock(id=88)
-    service.mock_workspace_repo.get_public_workspace.return_value = (
+    service.mock_workspace_repo.get_system_team_workspace.return_value = (
         mock_workspace
     )
 

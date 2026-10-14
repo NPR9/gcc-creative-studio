@@ -40,20 +40,10 @@ resourcemanager_v3.ProjectsClient = MagicMock()
 # 1. Patch database migrations BEFORE importing app to avoid lifespan triggering them
 @pytest.fixture(name="mock_migrations", scope="session", autouse=True)
 def fixture_mock_migrations():
-    """Bypasses database migrations and bootstrapping during startup."""
+    """Bypasses database migrations during startup."""
     with patch(
         "src.database_migrations.run_pending_migrations", AsyncMock()
-    ) as mock, patch(
-        "bootstrap.bootstrap.ensure_admin_user_exists", AsyncMock()
-    ), patch(
-        "bootstrap.bootstrap.ensure_default_workspace_exists", AsyncMock()
-    ), patch(
-        "bootstrap.bootstrap.ensure_bootstrap_admin_workspaces", AsyncMock()
-    ), patch(
-        "bootstrap.bootstrap.seed_vto_assets", AsyncMock()
-    ), patch(
-        "bootstrap.bootstrap.seed_media_templates", AsyncMock()
-    ):
+    ) as mock:
         yield mock
 
 

@@ -56,6 +56,8 @@ export class GalleryCardComponent implements OnDestroy {
   @Input() isSelected = false;
   @Input() anyItemSelected = false;
   @Input() filteredTags: string[] = [];
+  @Input() showShareAction = false;
+  @Input() showDeleteAction = false;
 
   @Output() mediaItemSelected = new EventEmitter<MediaItemSelection>();
   @Output() mediaSelected = new EventEmitter<GalleryItem>();
@@ -63,6 +65,11 @@ export class GalleryCardComponent implements OnDestroy {
     item: GalleryItem;
     event: MouseEvent;
     selectedIndex: number;
+  }>();
+  @Output() shareClicked = new EventEmitter<GalleryItem>();
+  @Output() deleteClicked = new EventEmitter<{
+    item: GalleryItem;
+    imageIndex: number;
   }>();
 
   currentImageIndex = 0;
@@ -190,6 +197,21 @@ export class GalleryCardComponent implements OnDestroy {
       item: this.item,
       event,
       selectedIndex: this.currentImageIndex,
+    });
+  }
+
+  onShareClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.shareClicked.emit(this.item);
+  }
+
+  onDeleteClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.deleteClicked.emit({
+      item: this.item,
+      imageIndex: this.currentImageIndex,
     });
   }
 

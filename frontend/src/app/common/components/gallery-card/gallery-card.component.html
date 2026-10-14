@@ -124,6 +124,33 @@
   >
     <mat-icon *ngIf="isSelected">check</mat-icon>
   </div>
+
+  <div
+    class="card-actions"
+    *ngIf="showShareAction || showDeleteAction"
+    (click)="$event.preventDefault(); $event.stopPropagation()"
+  >
+    <button
+      *ngIf="showShareAction && item.itemType === 'media_item'"
+      type="button"
+      class="card-action-btn"
+      matTooltip="Share to Team Workspace"
+      matTooltipPosition="above"
+      (click)="onShareClick($event)"
+    >
+      <mat-icon>share</mat-icon>
+    </button>
+    <button
+      *ngIf="showDeleteAction"
+      type="button"
+      class="card-action-btn"
+      matTooltip="Delete"
+      matTooltipPosition="above"
+      (click)="onDeleteClick($event)"
+    >
+      <mat-icon>delete</mat-icon>
+    </button>
+  </div>
   
   <!-- Tags Section -->
   <div class="tags-section" *ngIf="(item.tags?.length ?? 0) > 0 || isAdmin">

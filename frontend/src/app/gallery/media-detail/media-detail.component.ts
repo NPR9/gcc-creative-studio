@@ -362,6 +362,50 @@ export class MediaDetailComponent implements OnDestroy {
     void this.router.navigate(['/video'], navigationExtras);
   }
 
+  handleEditWithOmni(event: {mediaItem: any; selectedIndex: number}): void {
+    if (!this.mediaItem) {
+      return;
+    }
+
+    const index = event.selectedIndex;
+    const mime = this.mediaItem.mimeType || '';
+    const isAudio = mime.startsWith('audio/');
+
+    const remixState: any = {
+      parentMediaItemId: this.mediaItem.id,
+      parentMediaIndex: index,
+      generationModel: 'gemini-omni',
+      isOmniMode: true,
+    };
+
+    if (isAudio) {
+      remixState.referenceAudio = {
+        id: this.mediaItem.id,
+        type: this.mediaItem.itemType || 'media_item',
+        index: index,
+        name:
+          this.mediaItem.originalPrompt || `Audio Input ${this.mediaItem.id}`,
+      };
+    } else {
+      remixState.referenceVideo = {
+        id: this.mediaItem.id,
+        type: this.mediaItem.itemType || 'media_item',
+        index: index,
+        name:
+          this.mediaItem.originalPrompt || `Video Input ${this.mediaItem.id}`,
+        previewUrl:
+          this.mediaItem.presignedThumbnailUrls?.[index] ||
+          this.mediaItem.presignedUrls?.[index] ||
+          '',
+      };
+    }
+
+    const navigationExtras: NavigationExtras = {
+      state: {remixState},
+    };
+    void this.router.navigate(['/video'], navigationExtras);
+  }
+
   sendToVto(index: number): void {
     if (!this.mediaItem) {
       return;
@@ -400,7 +444,7 @@ export class MediaDetailComponent implements OnDestroy {
       // Since it's a video, we can use the thumbnail as a preview.
       startImagePreviewUrl:
         this.mediaItem.presignedThumbnailUrls?.[event.selectedIndex],
-      generationModel: 'veo-2.0-generate-001', // Switch to Veo 2 for video input
+      generationModel: 'veo-3.1-generate-001', // Switch to Veo 3.1 for video input
     };
 
     const navigationExtras: NavigationExtras = {
@@ -488,16 +532,26 @@ export class MediaDetailComponent implements OnDestroy {
     }
   }
 
-  public deleteCurrentMedia(): void {
+  public deleteCurrentMedia(imageIndex = 0): void {
     if (!this.mediaItem?.id) return;
 
-    const workspaceId = this.workspaceStateService.getActiveWorkspaceId();
-    if (workspaceId === null) return;
+    // Delete against the item's own workspace so it works for both the
+    // personal gallery and the shared gallery preview.
+    const workspaceId =
+      this.mediaItem.workspaceId ??
+      this.workspaceStateService.getActiveWorkspaceId();
+    if (workspaceId === null || workspaceId === undefined) return;
+
+    const imageCount = this.mediaItem.presignedUrls?.length || 1;
+    const deletingSingleImage = imageCount > 1;
+    const itemType = this.mediaItem.itemType || 'media_item';
 
     const dialogRef = this.dialog.open(ConfirmationDialogComponent, {
       data: {
-        title: 'Delete Media',
-        message: 'Are you sure you want to delete this media item?',
+        title: deletingSingleImage ? 'Delete Image' : 'Delete Media',
+        message: deletingSingleImage
+          ? 'Delete only this image? Other images in this generation will stay.'
+          : 'Are you sure you want to delete this media item?',
       },
     });
 
@@ -505,16 +559,42 @@ export class MediaDetailComponent implements OnDestroy {
       if (result) {
         this.galleryService
           .bulkDelete(
-            [{id: this.mediaItem!.id, type: this.mediaItem!.itemType}],
+            [
+              {
+                id: this.mediaItem!.id,
+                type: itemType,
+                imageIndex: deletingSingleImage ? imageIndex : null,
+              },
+            ],
             workspaceId,
           )
           .subscribe({
             next: () => {
               handleSuccessSnackbar(
                 this._snackBar,
-                'Media deleted successfully',
+                deletingSingleImage
+                  ? 'Image deleted successfully'
+                  : 'Media deleted successfully',
               );
-              void this.router.navigate(['/gallery']);
+              if (deletingSingleImage) {
+                const nextIndex = Math.min(
+                  imageIndex,
+                  imageCount - 2,
+                );
+                void this.router.navigate([], {
+                  relativeTo: this.route,
+                  queryParams: {img_index: nextIndex > 0 ? nextIndex : null},
+                  queryParamsHandling: 'merge',
+                  replaceUrl: true,
+                });
+                this.initialSlideIndex = Math.max(0, nextIndex);
+                this.fetchMediaDetails(
+                  this.mediaItem!.id,
+                  itemType === 'source_asset',
+                );
+              } else {
+                void this.router.navigate(['/gallery']);
+              }
             },
             error: err => {
               handleErrorSnackbar(this._snackBar, err, 'Delete media');

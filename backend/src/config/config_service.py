@@ -44,23 +44,17 @@ class ConfigService(BaseSettings):
     ENVIRONMENT: str = "development"
     FRONTEND_URL: str = "http://localhost:4200"
     BACKEND_URL: str = "http://localhost:8080"
-    IZUMI_AGENT_URL: str = "http://izumi-agent:8080"
     LOG_LEVEL: str = "INFO"
     INIT_VERTEX: bool = True
 
-    # --- Google Identity ---
+    # --- Google Identity / IAP ---
     GOOGLE_TOKEN_AUDIENCE: str = ""
+    # Expected audience claim on X-Goog-IAP-JWT-Assertion. Falls back to
+    # GOOGLE_TOKEN_AUDIENCE when empty.
+    IAP_AUDIENCE: str = ""
+    LOCAL_USER_EMAIL: str = "dev@example.com"
     ALLOWED_ORGS_STR: str = Field(
         default="", alias="IDENTITY_PLATFORM_ALLOWED_ORGS"
-    )
-    ALLOWED_EMAILS_STR: str = Field(default="", alias="ALLOWED_EMAILS")
-    ADMIN_OWNER_EMAILS_STR: str = Field(
-        default=(
-            "joejoseph.george@metro.digital,"
-            "manish.singh@metro-gsc.in,"
-            "abhishek.acharya@metro-gsc.in"
-        ),
-        alias="ADMIN_OWNER_EMAILS",
     )
 
     # --- Storage ---
@@ -81,7 +75,7 @@ class ConfigService(BaseSettings):
     DB_PORT: str = "5432"
 
     # --- Veo ---
-    VEO_MODEL_ID: str = "veo-2.0-generate-001"
+    VEO_MODEL_ID: str = "veo-3.1-generate-001"
 
     # --- VTO ---
     VTO_MODEL_ID: str = "virtual-try-on-001"
@@ -103,9 +97,14 @@ class ConfigService(BaseSettings):
         ""  # The email address to send from (e.g., no-reply@your-domain.com)
     )
     ADMIN_USER_EMAIL: str = "system"
-
-    # --- Agent Auth ---
-    INTERNAL_AGENT_SECRET: str = "secret-agent-key"
+    ADMIN_OWNER_EMAILS_STR: str = Field(
+        default=(
+            "joejoseph.george@metro.digital,"
+            "manish.singh@metro-gsc.in,"
+            "abhishek.acharya@metro-gsc.in"
+        ),
+        alias="ADMIN_OWNER_EMAILS",
+    )
 
     # --- Workflows ---
     WORKFLOWS_LOCATION: str = "us-central1"
@@ -152,15 +151,6 @@ class ConfigService(BaseSettings):
             org.strip()
             for org in self.ALLOWED_ORGS_STR.split(",")
             if org.strip()
-        )
-
-    @computed_field
-    @property
-    def ALLOWED_EMAILS(self) -> set[str]:
-        return set(
-            email.strip().lower()
-            for email in self.ALLOWED_EMAILS_STR.split(",")
-            if email.strip()
         )
 
     @computed_field

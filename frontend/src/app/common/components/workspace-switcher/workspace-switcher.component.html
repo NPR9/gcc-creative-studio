@@ -20,37 +20,28 @@
       class="workspace-container bg-gradient-to-b from-zinc-500/50 to-neutral-700/20 rounded-[48px] shadow-[2px_2px_12px_0px_rgba(0,0,0,0.10)] outline outline-1 outline-offset-[-1px] outline-stone-300/80 backdrop-blur-[10px] z-[1000]"
       [matMenuTriggerFor]="workspaceMenu"
       [matTooltip]="
-        'You are on a ' +
-        (activeWorkspace?.scope ?? 'private') +
-        ' workspace. Click to switch workspaces!'
+        assignedSharedWorkspace
+          ? 'You are part of the ' +
+            assignedSharedWorkspace.name +
+            ' shared workspace.'
+          : 'Your personal workspace.'
       "
     >
-      <mat-icon>{{
-        activeWorkspace?.scope === WorkspaceScope.PUBLIC ? 'public' : 'lock'
-      }}</mat-icon>
+      <mat-icon>person</mat-icon>
       <span class="workspace-name">{{
-        activeWorkspace?.name || 'Select Workspace'
+        activeWorkspace?.name || 'Personal Workspace'
       }}</span>
       <mat-icon>unfold_more</mat-icon>
     </div>
 
     <mat-menu #workspaceMenu="matMenu" xPosition="after">
-      <button
-        mat-menu-item
-        *ngFor="let workspace of selectableWorkspaces"
-        (click)="setActiveWorkspace(workspace.id)"
-      >
-        <mat-icon
-          [style.visibility]="
-            activeWorkspaceId === workspace.id ? 'visible' : 'hidden'
-          "
-          >check</mat-icon
-        >
-        <mat-icon>{{
-          workspace.scope === WorkspaceScope.PUBLIC ? 'public' : 'lock'
-        }}</mat-icon>
-        <span>{{ workspace.name }}</span>
-      </button>
+      <div class="px-4 py-2 text-xs text-neutral-500">
+        {{
+          assignedSharedWorkspace
+            ? 'Part of: ' + assignedSharedWorkspace.name
+            : 'Not assigned to a shared workspace'
+        }}
+      </div>
       <mat-divider></mat-divider>
       <button
         mat-menu-item

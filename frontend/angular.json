@@ -85,9 +85,7 @@
               "outputHashing": "all",
               "sourceMap": false,
               "namedChunks": false,
-              "extractLicenses": true,
-              "prerender": false,
-              "ssr": false
+              "extractLicenses": true
             },
             "build-dev": {
               "prerender": false,

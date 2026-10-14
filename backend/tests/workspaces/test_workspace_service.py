@@ -38,27 +38,20 @@ def fixture_mock_user_repo():
     return AsyncMock()
 
 
-@pytest.fixture(name="mock_group_repo")
-def fixture_mock_group_repo():
-    return AsyncMock()
-
-
 @pytest.fixture(name="mock_email_service")
 def fixture_mock_email_service():
-    return MagicMock()  # Synchronous service usually
+    return MagicMock()
 
 
 @pytest.fixture(name="workspace_service")
 def fixture_workspace_service(
     mock_workspace_repo,
     mock_user_repo,
-    mock_group_repo,
     mock_email_service,
 ):
     return WorkspaceService(
         workspace_repo=mock_workspace_repo,
         user_repo=mock_user_repo,
-        group_repo=mock_group_repo,
         email_service=mock_email_service,
     )
 
@@ -93,7 +86,7 @@ class TestCreateWorkspace:
         initial_members = called_args.get("initial_members")
         assert len(initial_members) == 1
         assert initial_members[0].user_id == mock_user.id
-        assert initial_members[0].role == WorkspaceRoleEnum.OWNER
+        assert initial_members[0].role == WorkspaceRoleEnum.ADMIN
 
 
 class TestInviteUserToWorkspace:
@@ -109,8 +102,7 @@ class TestInviteUserToWorkspace:
         mock_workspace_repo.get_by_id.return_value = None
         invite_dto = InviteUserDto(
             email="guest@example.com",
-            role=WorkspaceRoleEnum.VIEWER,
-            group_id=1,
+            role=WorkspaceRoleEnum.USER,
         )
 
         with pytest.raises(HTTPException) as exc_info:
@@ -133,8 +125,7 @@ class TestInviteUserToWorkspace:
         mock_workspace_repo.get_by_id.return_value = workspace
         invite_dto = InviteUserDto(
             email="guest@example.com",
-            role=WorkspaceRoleEnum.VIEWER,
-            group_id=1,
+            role=WorkspaceRoleEnum.USER,
         )
 
         with pytest.raises(HTTPException) as exc_info:
@@ -143,7 +134,7 @@ class TestInviteUserToWorkspace:
             )
 
         assert exc_info.value.status_code == 403
-        assert "Only the workspace owner" in exc_info.value.detail
+        assert "workspace owner" in exc_info.value.detail.lower()
 
     @pytest.mark.anyio
     async def test_user_not_found(
@@ -182,14 +173,12 @@ class TestInviteUserToWorkspace:
         workspace_service,
         mock_workspace_repo,
         mock_user_repo,
-        mock_group_repo,
         mock_email_service,
         mock_user,
     ):
         workspace = WorkspaceModel(id=1, name="Test", owner_id=mock_user.id)
         mock_workspace_repo.get_by_id.return_value = workspace
 
-        # Mock invited user
         from src.users.user_model import UserModel
 
         invited_user = UserModel(
@@ -209,12 +198,8 @@ class TestInviteUserToWorkspace:
 
         invite_dto = InviteUserDto(
             email="guest@example.com",
-            role=WorkspaceRoleEnum.VIEWER,
-            group_id=1,
+            role=WorkspaceRoleEnum.USER,
         )
-
-        mock_group = MagicMock(shared_workspace_id=2)
-        mock_group_repo.get_by_id_with_members.return_value = mock_group
 
         result = await workspace_service.invite_user_to_workspace(
             1,
@@ -223,9 +208,7 @@ class TestInviteUserToWorkspace:
         )
 
         assert result == updated_workspace
-        assert mock_workspace_repo.add_member_to_workspace.call_count == 2
-        mock_group_repo.get_by_id_with_members.assert_called_once_with(1)
-        mock_group_repo.add_member.assert_called_once()
+        mock_workspace_repo.add_member_to_workspace.assert_called_once()
         mock_email_service.send_workspace_invitation_email.assert_called_once()
 
 
@@ -233,98 +216,49 @@ class TestListWorkspacesForUser:
     """Tests for WorkspaceService.list_workspaces_for_user."""
 
     @pytest.mark.anyio
-    async def test_list_workspaces_combine_lists(
+    async def test_list_workspaces_for_user(
         self,
         workspace_service,
         mock_workspace_repo,
         mock_user,
     ):
-        w1 = WorkspaceModel(id=1, name="Private 1", owner_id=mock_user.id)
-        w2 = WorkspaceModel(
-            id=2,
-            name="Public 1",
-            owner_id=99,
-        )  # Public, owned by someone else
-
-        mock_workspace_repo.find_by_member_id.return_value = [w1]
-        mock_workspace_repo.get_all_public_workspaces.return_value = [w2]
+        workspaces = [
+            WorkspaceModel(id=1, name="Personal", owner_id=mock_user.id),
+            WorkspaceModel(id=2, name="Team", owner_id=99),
+        ]
+        mock_workspace_repo.find_by_member_id.return_value = workspaces
 
         result = await workspace_service.list_workspaces_for_user(mock_user)
 
         assert len(result) == 2
-        ids = [w.id for w in result]
-        assert 1 in ids
-        assert 2 in ids
+        mock_workspace_repo.find_by_member_id.assert_called_once_with(
+            mock_user.id
+        )
 
 
 class TestListSwitcherWorkspacesForUser:
     """Tests for WorkspaceService.list_switcher_workspaces_for_user."""
 
     @pytest.mark.anyio
-    async def test_list_switcher_workspaces_for_regular_user(
+    async def test_list_switcher_workspaces(
         self,
         workspace_service,
         mock_workspace_repo,
-        mock_group_repo,
         mock_user,
     ):
-        w1 = WorkspaceModel(id=1, name="Personal", owner_id=mock_user.id)
-        w_global = WorkspaceModel(id=3, name="AI Enabler", owner_id=99)
-        mock_workspace_repo.find_private_by_member_id.return_value = [w1]
-        mock_workspace_repo.find_global_by_member_id.return_value = [w_global]
+        workspaces = [
+            WorkspaceModel(id=1, name="Personal", owner_id=mock_user.id),
+            WorkspaceModel(id=3, name="Team", owner_id=99),
+        ]
+        mock_workspace_repo.find_by_member_id.return_value = workspaces
 
         result = await workspace_service.list_switcher_workspaces_for_user(
             mock_user
         )
 
-        # Non-admin sees: personal PRIVATE + GLOBAL where member
         assert len(result) == 2
-        assert result[0].id == 1
-        assert result[1].id == 3
-        mock_workspace_repo.find_private_by_member_id.assert_called_once_with(
+        mock_workspace_repo.find_by_member_id.assert_called_once_with(
             mock_user.id
-        )
-        mock_workspace_repo.find_global_by_member_id.assert_called_once_with(
-            mock_user.id
-        )
-
-    @pytest.mark.anyio
-    async def test_list_switcher_workspaces_for_admin(
-        self,
-        workspace_service,
-        mock_workspace_repo,
-        mock_group_repo,
-    ):
-        from src.users.user_model import UserModel
-
-        admin_user = UserModel(
-            id=99,
-            email="admin@example.com",
-            roles=["admin"],
-            name="Admin",
-        )
-        w_personal = WorkspaceModel(id=10, name="admin@example.com", owner_id=99)
-        w_global1 = WorkspaceModel(id=11, name="AI Enabler", owner_id=99)
-        w_global2 = WorkspaceModel(id=12, name="Design Team", owner_id=3)
-        mock_workspace_repo.find_all_private.return_value = [w_personal]
-        mock_workspace_repo.find_all_global.return_value = [w_global1, w_global2]
-
-        result = await workspace_service.list_switcher_workspaces_for_user(
-            admin_user
-        )
-
-        # Admin sees: all PRIVATE + ALL GLOBAL (full visibility)
-        assert len(result) == 3
-        assert result[0].id == 10  # personal PRIVATE
-        assert result[1].id == 11  # GLOBAL 1
-        assert result[2].id == 12  # GLOBAL 2
-        mock_workspace_repo.find_all_private.assert_called_once_with(
-            limit=1000,
-            offset=0,
-        )
-        mock_workspace_repo.find_all_global.assert_called_once_with(
-            limit=1000,
-            offset=0,
         )
 
 

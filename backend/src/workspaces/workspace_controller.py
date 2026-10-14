@@ -19,7 +19,7 @@ from src.auth.auth_guard import get_current_user
 from src.users.user_model import UserModel
 from src.workspaces.dto.create_workspace_dto import CreateWorkspaceDto
 from src.workspaces.dto.invite_user_dto import InviteUserDto
-from src.workspaces.schema.workspace_model import WorkspaceModel
+from src.workspaces.schema.workspace_model import WorkspaceMember, WorkspaceModel
 from src.workspaces.workspace_service import WorkspaceService
 
 router = APIRouter(
@@ -85,12 +85,46 @@ async def list_workspace_switcher_workspaces(
 ):
     """Retrieves switcher-focused workspaces for the current user.
 
-    Returns only private workspaces accessible by the user and excludes
-    group-shared workspaces.
+    Returns all workspaces the user is a member of (personal and team).
     """
     return await workspace_service.list_switcher_workspaces_for_user(
         current_user
     )
+
+
+@router.get(
+    "/assigned",
+    response_model=WorkspaceModel | None,
+    summary="Get Assigned Shared Workspace",
+)
+async def get_assigned_shared_workspace(
+    current_user: UserModel = Depends(get_current_user),
+    workspace_service: WorkspaceService = Depends(),
+):
+    """Returns the workspace shown as the user's assignment in the switcher.
+
+    For admins this is the shared admin workspace; for regular users it is
+    their team workspace. Returns null when there is no such assignment.
+    """
+    return await workspace_service.get_assigned_display_workspace(current_user)
+
+
+@router.get(
+    "/{workspace_id}/members",
+    response_model=list[WorkspaceMember],
+    summary="List Workspace Members",
+)
+async def list_workspace_members(
+    workspace_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    workspace_service: WorkspaceService = Depends(),
+):
+    """Returns members of a workspace the current user belongs to."""
+    from src.workspaces.workspace_auth_guard import WorkspaceAuth
+
+    auth = WorkspaceAuth(workspace_service.workspace_repo)
+    workspace = await auth.authorize(workspace_id, current_user)
+    return workspace.members
 
 
 @router.post(

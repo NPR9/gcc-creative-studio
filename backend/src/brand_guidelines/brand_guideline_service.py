@@ -51,7 +51,7 @@ from src.common.storage_service import GcsService
 from src.multimodal.gemini_service import GeminiService
 from src.users.user_model import UserModel, UserRoleEnum
 from src.workspaces.repository.workspace_repository import WorkspaceRepository
-from src.workspaces.schema.workspace_model import WorkspaceScopeEnum
+from src.workspaces.schema.workspace_model import WorkspaceTypeEnum
 
 logger = logging.getLogger(__name__)
 
@@ -488,18 +488,21 @@ class BrandGuidelineService:
                 detail="Parent workspace for this guideline not found.",
             )
 
-        if (
-            not is_system_admin
-            and workspace.scope != WorkspaceScopeEnum.PUBLIC
-            and current_user.id != workspace.owner_id
-            and not await self.workspace_repo.is_member(
+        if not is_system_admin:
+            is_member = await self.workspace_repo.is_member(
                 guideline.workspace_id, current_user.id
             )
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not authorized to view this brand guideline.",
-            )
+            is_owner = current_user.id == workspace.owner_id
+            if workspace.type == WorkspaceTypeEnum.PERSONAL and not is_owner:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to view this brand guideline.",
+                )
+            if workspace.type == WorkspaceTypeEnum.TEAM and not is_member:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not authorized to view this brand guideline.",
+                )
 
         return await self._create_brand_guideline_response(guideline)
 
@@ -516,15 +519,18 @@ class BrandGuidelineService:
                 detail=f"Workspace with ID '{workspace_id}' not found.",
             )
 
-        if not workspace.scope == WorkspaceScopeEnum.PUBLIC:
-            is_system_admin = UserRoleEnum.ADMIN in current_user.roles
-            if (
-                not is_system_admin
-                and current_user.id != workspace.owner_id
-                and not await self.workspace_repo.is_member(
-                    workspace_id, current_user.id
+        is_system_admin = UserRoleEnum.ADMIN in current_user.roles
+        if not is_system_admin:
+            is_member = await self.workspace_repo.is_member(
+                workspace_id, current_user.id
+            )
+            is_owner = current_user.id == workspace.owner_id
+            if workspace.type == WorkspaceTypeEnum.PERSONAL and not is_owner:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You are not a member of this workspace.",
                 )
-            ):
+            if workspace.type == WorkspaceTypeEnum.TEAM and not is_member:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You are not a member of this workspace.",

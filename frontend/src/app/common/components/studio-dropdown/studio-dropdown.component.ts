@@ -31,7 +31,6 @@ export interface DropdownOption {
   color?: string;
   icon?: string;
   isSvgIcon?: boolean;
-  tooltip?: string;
   deletable?: boolean;
 }
 

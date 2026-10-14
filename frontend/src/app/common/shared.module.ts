@@ -38,7 +38,6 @@ import {MatChipsModule} from '@angular/material/chips';
 import {CreateWorkspaceModalComponent} from './components/create-workspace-modal/create-workspace-modal.component';
 import {ConfirmationDialogComponent} from './components/confirmation-dialog/confirmation-dialog.component';
 import {CopyToWorkspaceDialogComponent} from './components/copy-to-workspace-dialog/copy-to-workspace-dialog.component';
-import {ShareToGroupDialogComponent} from './components/share-to-group-dialog/share-to-group-dialog.component';
 import {InviteUserModalComponent} from './components/invite-user-modal/invite-user-modal.component';
 import {WorkspaceSwitcherComponent} from './components/workspace-switcher/workspace-switcher.component';
 import {BrandGuidelineDialogComponent} from './components/brand-guideline-dialog/brand-guideline-dialog.component';
@@ -60,7 +59,6 @@ const DECLARATIONS = [
   CreateWorkspaceModalComponent,
   ConfirmationDialogComponent,
   CopyToWorkspaceDialogComponent,
-  ShareToGroupDialogComponent,
   InviteUserModalComponent,
   WorkspaceSwitcherComponent,
   BrandGuidelineDialogComponent,

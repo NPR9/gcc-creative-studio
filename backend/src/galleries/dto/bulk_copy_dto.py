@@ -24,3 +24,9 @@ class BulkCopyItemDto(BaseModel):
 class BulkCopyDto(BaseModel):
     items: list[BulkCopyItemDto]
     target_workspace_id: int
+
+
+class ShareItemsDto(BaseModel):
+    """Request body for sharing items into the caller's shared workspace."""
+
+    items: list[BulkCopyItemDto]

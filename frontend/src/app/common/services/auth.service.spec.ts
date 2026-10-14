@@ -15,11 +15,11 @@
  */
 
 import {TestBed} from '@angular/core/testing';
+import {AuthService} from './auth.service';
 import {HttpClientTestingModule} from '@angular/common/http/testing';
 import {Router} from '@angular/router';
-import {Auth} from '@angular/fire/auth';
-import {AuthService} from './auth.service';
 import {UserService} from './user.service';
+import {PLATFORM_ID} from '@angular/core';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -29,9 +29,9 @@ describe('AuthService', () => {
       imports: [HttpClientTestingModule],
       providers: [
         AuthService,
-        {provide: Router, useValue: {}},
-        {provide: UserService, useValue: {}},
-        {provide: Auth, useValue: {}},
+        {provide: Router, useValue: {navigate: () => undefined, navigateByUrl: () => undefined, url: '/'}},
+        {provide: UserService, useValue: {getUserDetails: () => ({email: 'dev@example.com', roles: []})}},
+        {provide: PLATFORM_ID, useValue: 'browser'},
       ],
     });
     service = TestBed.inject(AuthService);

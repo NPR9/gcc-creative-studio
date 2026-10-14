@@ -19,33 +19,34 @@ import {RouterModule, Routes} from '@angular/router';
 import {AdminAuthGuard} from './admin/admin-auth.guard';
 import {AudioComponent} from './audio/audio.component';
 import {AuthGuardService} from './common/services/auth.guard.service';
+import {FunTemplatesComponent} from './fun-templates/fun-templates.component';
 import {MediaDetailComponent} from './gallery/media-detail/media-detail.component';
 import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.component';
-import {GroupGalleryComponent} from './gallery/group-gallery/group-gallery.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {VideoComponent} from './video/video.component';
+import {VtoComponent} from './vto/vto.component';
 import {ExecutionHistoryComponent} from './workflows/execution-history/execution-history.component';
 import {WorkflowEditorComponent} from './workflows/workflow-editor/workflow-editor.component';
 import {WorkflowListComponent} from './workflows/workflow-list/workflow-list.component';
 import {WorkbenchComponent} from './workbench/workbench.component';
 import {UpscaleComponent} from './upscale/upscale.component';
 import {UserRolesEnum} from './common/models/user.model';
-import {ProjectsComponent} from './projects/projects.component';
 
 const routes: Routes = [
   {path: 'login', component: LoginComponent},
   {path: '', component: HomeComponent, canActivate: [AuthGuardService]},
+  {
+    path: 'fun-templates',
+    component: FunTemplatesComponent,
+    canActivate: [AuthGuardService],
+  },
   {path: 'video', component: VideoComponent, canActivate: [AuthGuardService]},
+  {path: 'vto', component: VtoComponent, canActivate: [AuthGuardService]},
   {path: 'audio', component: AudioComponent, canActivate: [AuthGuardService]},
   {
     path: 'workbench',
     component: WorkbenchComponent,
-    canActivate: [AuthGuardService],
-  },
-  {
-    path: 'projects',
-    component: ProjectsComponent,
     canActivate: [AuthGuardService],
   },
   // When a user goes to '/gallery', show the main feed.
@@ -53,11 +54,12 @@ const routes: Routes = [
     path: 'gallery',
     component: MediaGalleryComponent,
   },
-  // Group gallery for viewing group-shared media
+  // Shared Gallery: assets shared into the user's assigned shared workspace.
   {
-    path: 'groups',
-    component: GroupGalleryComponent,
+    path: 'shared-gallery',
+    component: MediaGalleryComponent,
     canActivate: [AuthGuardService],
+    data: {sharedView: true},
   },
   // When a user goes to '/gallery/some-unique-id', show the detail page.
   // The ':id' is a placeholder for the media item's ID.
@@ -80,12 +82,6 @@ const routes: Routes = [
   {
     path: 'admin',
     loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule),
-    canActivate: [AdminAuthGuard],
-  },
-  {
-    path: 'analytics',
-    loadChildren: () =>
-      import('./analytics/analytics.module').then(m => m.AnalyticsModule),
     canActivate: [AdminAuthGuard],
   },
   {

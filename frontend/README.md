@@ -4,29 +4,17 @@
 
 To run the frontend locally using Docker Compose, you need to configure the environment file.
 
-### 1. Configure `development.environment.ts`
+### 1. Configure `environment.development.ts`
 
-Copy from `environments/environment.ts` and create a new file `environments/environment.development.ts`.
-Add the following configuration (replace values with your specific configuration):
+The repo already includes `src/environments/environment.development.ts`. For local Docker Compose, keep `isLocal: true` and set `localUserEmail` to the identity you want the backend to provision:
 
 ```typescript
 export const environment = {
-  // Project ID: creative-studio-deploy
-  firebase: {
-    apiKey: "your-api-key",
-    authDomain: "creative-studio-deploy.firebaseapp.com",
-    projectId: "creative-studio-deploy",
-    storageBucket: "creative-studio-deploy.firebasestorage.app",
-    messagingSenderId: "your-messaging-sender-id",
-    appId: "your-app-id",
-    measurementId: "G-XXXXXXXX"
-  },
   production: false,
   isLocal: true,
-  GOOGLE_CLIENT_ID: 'XXXX-XXXXXXXXXXX.apps.googleusercontent.com',
-  backendURL: 'http://localhost:8080/api',
-
-  // Common env vars
+  backendURL: '/api',
+  localUserEmail: 'dev@example.com',
+  iapClientId: '',
   EMAIL_REGEX: /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
   ADMIN: 'admin',
 };

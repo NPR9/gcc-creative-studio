@@ -57,18 +57,12 @@ from src.workflows_executor.workflows_executor_controller import (
     router as workflows_executor_router,
 )
 from src.workspaces.workspace_controller import router as workspace_router
-from src.agents.agent_controller import router as agent_router
-from src.projects.project_controller import router as project_router
-from src.groups.group_controller import router as group_router
 
 
 def configure_cors(app):
     """Configures CORS middleware based on the environment."""
-    import json
-
     environment = getenv("ENVIRONMENT")
     allowed_origins = []
-    is_strict = False
 
     if environment == "production":
         frontend_url = getenv("FRONTEND_URL")
@@ -77,36 +71,17 @@ def configure_cors(app):
                 "FRONTEND_URL environment variable not set in production"
             )
         allowed_origins.append(frontend_url)
-        is_strict = True
-    elif environment in ["pre-production", "pp"]:
-        # Use CORS_ORIGINS env var if provided by Terraform, otherwise use FRONTEND_URL
-        cors_origins_str = getenv("CORS_ORIGINS")
-        if cors_origins_str:
-            try:
-                parsed = json.loads(cors_origins_str)
-                if isinstance(parsed, list):
-                    allowed_origins.extend(parsed)
-                else:
-                    allowed_origins.append(str(parsed))
-            except json.JSONDecodeError:
-                allowed_origins.append(cors_origins_str)
-        frontend_url = getenv("FRONTEND_URL")
-        if frontend_url and frontend_url not in allowed_origins:
-            allowed_origins.append(frontend_url)
-        # Also allow localhost for local development against preprod backend
-        allowed_origins.append("http://localhost:4200")
-        is_strict = True
     elif environment in ["development", "test", "local"]:
         allowed_origins.append("*")  # Allow all origins in development
     else:
         raise ValueError(
-            f"Invalid ENVIRONMENT: {environment}. Must be 'production', 'pre-production', 'pp', 'development', 'test', or 'local'",
+            f"Invalid ENVIRONMENT: {environment}. Must be 'production', 'development' or 'local'",
         )
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
-        allow_credentials=is_strict,
+        allow_credentials=environment == "production",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -120,35 +95,30 @@ async def lifespan(app: FastAPI):
     # --- Startup ---
     logger.info("Starting up application...")
 
-    # Initialize Firebase Admin SDK (Auth only)
-    try:
-        from src.auth.firebase_client_service import firebase_client
-
-        # Trigger initialization
-        _ = firebase_client
-    except Exception as e:
-        logger.error(f"Failed to initialize Firebase: {e}")
-
     # Run Database Migrations and Bootstrap Data
     try:
         from src.database_migrations import run_pending_migrations
+
         await run_pending_migrations()
 
         logger.info("Running automatic database bootstrapping...")
         from bootstrap.bootstrap import (
+            cleanup_invalid_personal_workspaces,
             ensure_admin_user_exists,
+            ensure_admin_workspace_exists,
             ensure_bootstrap_admin_workspaces,
-            ensure_default_workspace_exists,
-            seed_vto_assets,
-            seed_media_templates,
+            ensure_default_team_workspace_exists,
+            remove_admins_from_shared_workspaces,
         )
         from src.database import async_session_local
+
         async with async_session_local() as db:
             admin_user = await ensure_admin_user_exists(db)
-            await ensure_default_workspace_exists(db, admin_user)
-            await ensure_bootstrap_admin_workspaces(db, admin_user)
-            await seed_vto_assets(db, admin_user)
-            await seed_media_templates(db, admin_user)
+            await ensure_default_team_workspace_exists(db, admin_user)
+            await ensure_admin_workspace_exists(db, admin_user)
+            await cleanup_invalid_personal_workspaces(db)
+            await ensure_bootstrap_admin_workspaces(db)
+            await remove_admins_from_shared_workspaces(db)
         logger.info("Database bootstrap completed successfully.")
     except Exception as e:
         logger.error(f"Failed to run database migrations/bootstrap: {e}")
@@ -222,6 +192,3 @@ app.include_router(brand_guideline_router)
 app.include_router(workflow_router)
 app.include_router(workflows_executor_router)
 app.include_router(workbench_router)
-app.include_router(agent_router)
-app.include_router(project_router)
-app.include_router(group_router)

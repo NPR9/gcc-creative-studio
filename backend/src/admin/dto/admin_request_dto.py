@@ -16,9 +16,12 @@ from pydantic import BaseModel, EmailStr
 
 
 class AddUserByEmailRequest(BaseModel):
-    """Request payload for direct admin user provisioning into a group.
-    
-    Users are always added as Members with their own private workspace.
-    """
+    """Request payload for adding a user to a team workspace by email."""
+
+    email: EmailStr
+
+
+class AddAdminUserByEmailRequest(BaseModel):
+    """Request payload for provisioning a platform admin by email."""
 
     email: EmailStr

@@ -14,91 +14,132 @@
  limitations under the License.
 -->
 
-<div class="p-4">
-  <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
-    <div>
-      <h1 class="text-3xl font-semibold">Group Usage Analytics</h1>
-      <p class="text-sm text-zinc-400 mt-1">Analytics grouped by workspace group membership and activity.</p>
+<div class="analytics-page p-6 md:p-8">
+  <header class="page-header">
+    <div class="page-header__text">
+      <h1 class="page-title">Workspace Usage Analytics</h1>
+      <p class="page-subtitle">
+        Estimated GenAI cost per user for the selected workspace. Personal
+        workspaces show only the owner; shared workspaces show every member.
+      </p>
     </div>
+    <button
+      mat-stroked-button
+      type="button"
+      class="unit-prices-btn"
+      (click)="openUnitPricesDialog()"
+      aria-label="View model unit prices">
+      <mat-icon>info_outline</mat-icon>
+      Unit prices
+    </button>
+  </header>
+
+  <div class="controls-row">
+    <mat-form-field appearance="outline" class="workspace-select">
+      <mat-label>Workspace</mat-label>
+      <mat-select
+        [(ngModel)]="selectedWorkspaceId"
+        (selectionChange)="onWorkspaceChange()">
+        <mat-option *ngFor="let ws of workspaces" [value]="ws.id">
+          {{ ws.name }} ({{ scopeLabel(ws.type) }})
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
 
     <studio-date-range-filter
       [startDate]="startCalendarDate"
       [endDate]="endCalendarDate"
       (dateChange)="onCalendarDateChange($event)"
-      size="small"
-    ></studio-date-range-filter>
+      size="small">
+    </studio-date-range-filter>
   </div>
 
-  <div *ngIf="isLoading" class="flex justify-center py-10">
-    <mat-spinner diameter="44"></mat-spinner>
+  <div *ngIf="isLoading" class="loading-wrap">
+    <mat-spinner diameter="48"></mat-spinner>
   </div>
 
-  <div
-    *ngIf="errorMessage && !isLoading"
-    class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"
-  >
+  <div *ngIf="errorMessage && !isLoading" class="error-banner">
     {{ errorMessage }}
   </div>
 
-  <div *ngIf="!isLoading && !errorMessage" class="space-y-6">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
-        <p class="text-zinc-400 text-sm">Groups</p>
-        <p class="text-3xl font-semibold mt-1">{{ summary.totalGroups }}</p>
+  <div *ngIf="!isLoading && !errorMessage && usage" class="content-body">
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-label">Workspace</div>
+        <div class="summary-value">{{ usage.workspaceName }}</div>
+        <div class="summary-meta">
+          {{ scopeLabel(usage.workspaceScope) }}
+          <span *ngIf="isPersonalWorkspace"> · owner only</span>
+        </div>
       </div>
-      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
-        <p class="text-zinc-400 text-sm">Members</p>
-        <p class="text-3xl font-semibold mt-1">{{ summary.totalMembers }}</p>
+
+      <div class="summary-card">
+        <div class="summary-label">Users</div>
+        <div class="summary-value">{{ users.length }}</div>
       </div>
-      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
-        <p class="text-zinc-400 text-sm">Total Spend (USD)</p>
-        <p class="text-3xl font-semibold mt-1">{{ summary.totalSpendUsd | number: '1.2-2' }}</p>
+
+      <div class="summary-card summary-card--highlight">
+        <div class="summary-label">Estimated Spend (USD)</div>
+        <div class="summary-value">${{ totalCost | number: '1.2-4' }}</div>
       </div>
-      <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg p-4">
-        <p class="text-zinc-400 text-sm">Tokens Consumed</p>
-        <p class="text-3xl font-semibold mt-1">{{ summary.totalTokensConsumed | number }}</p>
+
+      <div class="summary-card">
+        <div class="summary-label">Events / Tokens</div>
+        <div class="summary-value">{{ totalEvents | number }}</div>
+        <div class="summary-meta">{{ totalTokens | number }} tokens</div>
       </div>
     </div>
 
-    <div class="bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden">
-      <table mat-table [dataSource]="breakdown" class="w-full">
-        <ng-container matColumnDef="name">
-          <th mat-header-cell *matHeaderCellDef>Group</th>
-          <td mat-cell *matCellDef="let row">{{ row.groupName }}</td>
-        </ng-container>
+    <div class="table-section">
+      <h2 class="table-section__title">Usage by user</h2>
 
-        <ng-container matColumnDef="country">
-          <th mat-header-cell *matHeaderCellDef>Country</th>
-          <td mat-cell *matCellDef="let row">{{ row.countryCode || 'N/A' }}</td>
-        </ng-container>
+      <div class="table-wrap">
+        <table mat-table [dataSource]="users" class="usage-table">
+          <ng-container matColumnDef="userEmail">
+            <th mat-header-cell *matHeaderCellDef>User</th>
+            <td mat-cell *matCellDef="let row">{{ row.userEmail }}</td>
+          </ng-container>
 
-        <ng-container matColumnDef="members">
-          <th mat-header-cell *matHeaderCellDef>Members</th>
-          <td mat-cell *matCellDef="let row">{{ row.memberCount }}</td>
-        </ng-container>
+          <ng-container matColumnDef="eventCount">
+            <th mat-header-cell *matHeaderCellDef>API Calls</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.eventCount | number }}
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="spend">
-          <th mat-header-cell *matHeaderCellDef>Spend (USD)</th>
-          <td mat-cell *matCellDef="let row">{{ row.spendUsd | number: '1.2-2' }}</td>
-        </ng-container>
+          <ng-container matColumnDef="tokens">
+            <th mat-header-cell *matHeaderCellDef>Tokens (in / out / think)</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.totalPromptTokens | number }} /
+              {{ row.totalCandidatesTokens | number }} /
+              {{ row.totalThoughtsTokens | number }}
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="tokens">
-          <th mat-header-cell *matHeaderCellDef>Tokens</th>
-          <td mat-cell *matCellDef="let row">{{ row.tokensConsumed | number }}</td>
-        </ng-container>
+          <ng-container matColumnDef="media">
+            <th mat-header-cell *matHeaderCellDef>Media</th>
+            <td mat-cell *matCellDef="let row">
+              {{ row.totalMediaCount | number }}
+            </td>
+          </ng-container>
 
-        <ng-container matColumnDef="activity">
-          <th mat-header-cell *matHeaderCellDef>Activity</th>
-          <td mat-cell *matCellDef="let row">{{ row.activityCount }}</td>
-        </ng-container>
+          <ng-container matColumnDef="cost">
+            <th mat-header-cell *matHeaderCellDef>Est. Cost (USD)</th>
+            <td mat-cell *matCellDef="let row">
+              ${{ row.estimatedCostUsd | number: '1.2-4' }}
+            </td>
+          </ng-container>
 
-        <tr mat-header-row *matHeaderRowDef="['name', 'country', 'members', 'spend', 'tokens', 'activity']"></tr>
-        <tr mat-row *matRowDef="let row; columns: ['name', 'country', 'members', 'spend', 'tokens', 'activity']"></tr>
+          <tr mat-header-row *matHeaderRowDef="userColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: userColumns"></tr>
 
-        <tr class="mat-row" *matNoDataRow>
-          <td class="mat-cell text-center py-6" colspan="6">No group usage data found for the selected date range.</td>
-        </tr>
-      </table>
+          <tr class="mat-row" *matNoDataRow>
+            <td class="mat-cell empty-row" colspan="5">
+              No usage found for this workspace in the selected date range.
+            </td>
+          </tr>
+        </table>
+      </div>
     </div>
   </div>
 </div>

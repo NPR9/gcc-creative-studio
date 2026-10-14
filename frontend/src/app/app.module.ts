@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-import {importProvidersFrom, Injector, NgModule} from '@angular/core';
-import {initializeApp, provideFirebaseApp} from '@angular/fire/app';
-import {getAuth, provideAuth} from '@angular/fire/auth';
-import {getFirestore, provideFirestore} from '@angular/fire/firestore';
+import {Injector, NgModule} from '@angular/core';
 import {MatButtonModule} from '@angular/material/button';
 import {MatChipsModule} from '@angular/material/chips';
 import {MatDatepickerModule} from '@angular/material/datepicker';
@@ -32,7 +29,6 @@ import {MatTabsModule} from '@angular/material/tabs';
 import {MatToolbarModule} from '@angular/material/toolbar';
 import {MatTooltipModule} from '@angular/material/tooltip';
 import {BrowserModule, provideClientHydration} from '@angular/platform-browser';
-import {environment} from '../environments/environment';
 import {setAppInjector} from './app-injector';
 import {NotificationContainerComponent} from './common/components/notification-container/notification-container.component';
 
@@ -40,22 +36,11 @@ import {ClipboardModule} from '@angular/cdk/clipboard';
 import {DragDropModule} from '@angular/cdk/drag-drop';
 import {ScrollingModule} from '@angular/cdk/scrolling';
 import {NgOptimizedImage} from '@angular/common';
-import {MarkdownModule} from 'ngx-markdown';
 import {
   HTTP_INTERCEPTORS,
   provideHttpClient,
   withInterceptorsFromDi,
 } from '@angular/common/http';
-import {getAnalytics, provideAnalytics} from '@angular/fire/analytics';
-import {AngularFireModule} from '@angular/fire/compat';
-import {
-  AngularFireAnalyticsModule,
-  ScreenTrackingService,
-  UserTrackingService,
-} from '@angular/fire/compat/analytics';
-import {AngularFireAuthModule} from '@angular/fire/compat/auth';
-import {AngularFireDatabaseModule} from '@angular/fire/compat/database';
-import {AngularFirestoreModule} from '@angular/fire/compat/firestore';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatCardModule} from '@angular/material/card';
@@ -86,18 +71,15 @@ import {AssignTagsDialogComponent} from './common/components/assign-tags-dialog/
 import {SharedModule} from './common/shared.module';
 import {AddVoiceDialogComponent} from './components/add-voice-dialog/add-voice-dialog.component';
 import {FooterComponent} from './footer/footer.component';
+import {FunTemplatesComponent} from './fun-templates/fun-templates.component';
 import {MediaDetailComponent} from './gallery/media-detail/media-detail.component';
 import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.component';
-import {GroupGalleryComponent} from './gallery/group-gallery/group-gallery.component';
 import {HeaderComponent} from './header/header.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
-import {FunTemplatesComponent} from './fun-templates/fun-templates.component';
 import {WorkbenchComponent} from './workbench/workbench.component';
-import {ProjectsComponent} from './projects/projects.component';
-import {ChatInterfaceComponent} from './workbench/components/chat-interface/chat-interface.component';
 import {BatchExecutionModalComponent} from './workflows/execution-history/batch-execution-modal/batch-execution-modal.component';
 import {ExecutionDetailsModalComponent} from './workflows/execution-history/execution-details-modal/execution-details-modal.component';
 import {ExecutionHistoryComponent} from './workflows/execution-history/execution-history.component';
@@ -111,7 +93,6 @@ import {WorkflowEditorComponent} from './workflows/workflow-editor/workflow-edit
 import {WorkflowListComponent} from './workflows/workflow-list/workflow-list.component';
 import {WorkflowStatusPipe} from './workflows/workflow-status.pipe';
 import {UpscaleComponent} from './upscale/upscale.component';
-import {StoryboardComponent} from './workbench/components/storyboard/storyboard.component';
 
 @NgModule({
   declarations: [
@@ -120,19 +101,17 @@ import {StoryboardComponent} from './workbench/components/storyboard/storyboard.
     FooterComponent,
     HomeComponent,
     LoginComponent,
-    VideoComponent,
-    VtoComponent,
     FunTemplatesComponent,
+    VideoComponent,
     MediaGalleryComponent,
-    GroupGalleryComponent,
     AssignTagsDialogComponent,
     MediaDetailComponent,
     MediaLightboxComponent,
+    VtoComponent,
     ImageSelectorComponent,
     SourceAssetGalleryComponent,
     ImageCropperDialogComponent,
     WorkbenchComponent,
-    ChatInterfaceComponent,
     AudioComponent,
     AddVoiceDialogComponent,
     WorkflowListComponent,
@@ -147,13 +126,11 @@ import {StoryboardComponent} from './workbench/components/storyboard/storyboard.
     StepExecutionDetailsComponent,
     BatchExecutionModalComponent,
     UpscaleComponent,
-    ProjectsComponent,
   ],
   imports: [
     BrowserModule,
     AppRoutingModule,
     NgOptimizedImage,
-    MarkdownModule.forRoot(),
     MatTooltipModule,
     MatToolbarModule,
     MatDividerModule,
@@ -192,28 +169,10 @@ import {StoryboardComponent} from './workbench/components/storyboard/storyboard.
     MatPaginatorModule,
     ClipboardModule,
     WorkflowStatusPipe,
-    StoryboardComponent,
   ],
   providers: [
     provideClientHydration(),
     provideHttpClient(withInterceptorsFromDi()),
-    provideFirebaseApp(() => initializeApp(environment.firebase)),
-    provideAuth(() => getAuth()),
-    provideFirestore(() => getFirestore()),
-    provideAnalytics(() => getAnalytics()),
-    importProvidersFrom([
-      AngularFireModule.initializeApp(environment.firebase),
-      AngularFireAuthModule,
-      AngularFirestoreModule,
-      AngularFireDatabaseModule,
-      AngularFireAnalyticsModule,
-    ]),
-    {
-      provide: ScreenTrackingService, // Automatically track screen views
-    },
-    {
-      provide: UserTrackingService, // Automatically track user interactions
-    },
     {provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true},
   ],
   bootstrap: [AppComponent],

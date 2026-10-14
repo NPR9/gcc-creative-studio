@@ -15,23 +15,11 @@
  */
 
 import {Injectable, PLATFORM_ID, inject} from '@angular/core';
-import {
-  Firestore,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from '@angular/fire/firestore';
 import {UserModel} from '../models/user.model';
 import {environment} from '../../../environments/environment';
 import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {user} from '@angular/fire/auth';
 import {isPlatformBrowser} from '@angular/common';
 
-const USER_COLLECTION = 'users';
 interface LooseObject {
   [key: string]: any;
 }
@@ -42,21 +30,9 @@ const badgeURL = `${environment.backendURL}/`;
   providedIn: 'root',
 })
 export class UserService {
-  private readonly firestore: Firestore = inject(Firestore);
   private platformId = inject(PLATFORM_ID);
 
   constructor(private http: HttpClient) {}
-
-  async get(uid: string): Promise<UserModel> {
-    const userRef = doc(this.firestore, USER_COLLECTION, uid);
-    const userDoc = await getDoc(userRef);
-    return userDoc.data() as UserModel;
-  }
-
-  async delete(uid: string) {
-    const userRef = doc(this.firestore, USER_COLLECTION, uid);
-    await deleteDoc(userRef);
-  }
 
   getUserDetails(): UserModel | null {
     if (!isPlatformBrowser(this.platformId)) return null;

@@ -28,30 +28,29 @@ from src.users.user_model import User
 class WorkspaceRoleEnum(str, Enum):
     """Defines the permissions a user has within a single workspace."""
 
-    VIEWER = "viewer"
-    EDITOR = "editor"
+    USER = "user"
     ADMIN = "admin"
-    OWNER = "owner"
 
 
-class WorkspaceScopeEnum(str, Enum):
-    """Defines the overall visibility of the workspace in the application."""
+class WorkspaceTypeEnum(str, Enum):
+    """Defines whether a workspace is personal, team-shared, or admin-only."""
 
-    PUBLIC = "public"  # Visible to everyone (e.g., the "Default Google Workspace" gallery)
-    PRIVATE = "private"  # Visible only to users listed in the 'members' list.
-    GLOBAL = "global"  # Shared group workspace, visible to all group members.
+    PERSONAL = "personal"
+    TEAM = "team"
+    # Dedicated shared workspace that all platform admins belong to. It is
+    # created during bootstrap and is not manageable via the public API.
+    ADMIN = "admin"
 
 
 class WorkspaceMember(BaseModel):
-    """An embedded sub-document defining a user's role within this workspace.
-    This complete list is stored on the workspace document.
-    """
+    """A member's role within a workspace."""
 
     user_id: int = Field(description="The User ID of the member.")
     email: str = Field(
         description="The member's email (denormalized for display)."
     )
-    role: WorkspaceRoleEnum = Field(default=WorkspaceRoleEnum.VIEWER)
+    name: str | None = Field(default=None, description="The member's name.")
+    role: WorkspaceRoleEnum = Field(default=WorkspaceRoleEnum.USER)
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -69,8 +68,8 @@ class Workspace(Base):
     owner_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False
     )
-    scope: Mapped[str] = mapped_column(
-        String, default=WorkspaceScopeEnum.PRIVATE.value
+    type: Mapped[str] = mapped_column(
+        String, default=WorkspaceTypeEnum.PERSONAL.value
     )
 
     # Relationships
@@ -95,9 +94,7 @@ class Workspace(Base):
 
 
 class WorkspaceMemberAssociation(Base):
-    """Association table for the many-to-many relationship between Users and Workspaces,
-    storing the role of the user in the workspace.
-    """
+    """Association table for the many-to-many relationship between Users and Workspaces."""
 
     __tablename__ = "workspace_members"
 
@@ -108,9 +105,9 @@ class WorkspaceMemberAssociation(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), primary_key=True
     )
-    role: Mapped[WorkspaceRoleEnum] = mapped_column(
+    role: Mapped[str] = mapped_column(
         String,
-        default=WorkspaceRoleEnum.VIEWER,
+        default=WorkspaceRoleEnum.USER.value,
     )
 
     # Relationships
@@ -124,19 +121,17 @@ class WorkspaceMemberAssociation(Base):
 
 
 class WorkspaceModel(BaseDocument):
-    """COLLECTION: workspaces (Root-Level Collection)
-    Represents a project, team, or folder. Access is controlled by the 'scope'
-    and the 'members' list.
-    """
+    """Represents a personal or team workspace."""
 
     id: int | None = None
 
     name: str
     owner_id: int = Field(
-        description="The user_id of the person who created this workspace.",
+        description="The user_id of the person who owns this workspace.",
     )
 
-    scope: WorkspaceScopeEnum = Field(
-        default=WorkspaceScopeEnum.PRIVATE,
-        description="Public workspaces are visible to all users. Private ones are visible only to members.",
+    type: WorkspaceTypeEnum = Field(
+        default=WorkspaceTypeEnum.PERSONAL,
+        description="Personal workspaces are private to the owner. Team workspaces are shared.",
     )
+    members: list[WorkspaceMember] = Field(default_factory=list)

@@ -17,15 +17,16 @@
 import {Component, Inject} from '@angular/core';
 import {FormBuilder, Validators} from '@angular/forms';
 import {MAT_DIALOG_DATA, MatDialogRef} from '@angular/material/dialog';
-import {Group} from '../../common/models/group.model';
+import {Workspace} from '../../common/models/workspace.model';
 
 export interface AddUserDialogData {
-  groups: Group[];
+  workspaces: Workspace[];
 }
 
 export interface AddUserDialogResult {
   email: string;
-  groupId: number;
+  isAdmin: boolean;
+  workspaceId?: number;
 }
 
 @Component({
@@ -47,19 +48,35 @@ export interface AddUserDialogResult {
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Group</mat-label>
-          <mat-select formControlName="groupId">
-            <mat-option *ngFor="let group of data.groups" [value]="group.id">
-              {{ group.name }}
+          <mat-label>User Type</mat-label>
+          <mat-select formControlName="userType">
+            <mat-option value="user">Regular User</mat-option>
+            <mat-option value="admin">Admin</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="!isAdminSelected">
+          <mat-label>Team Workspace</mat-label>
+          <mat-select formControlName="workspaceId">
+            <mat-option
+              *ngFor="let workspace of data.workspaces"
+              [value]="workspace.id"
+            >
+              {{ workspace.name }}
             </mat-option>
           </mat-select>
-          <mat-error *ngIf="form.get('groupId')?.hasError('required')">
-            Group is required
+          <mat-error *ngIf="form.get('workspaceId')?.hasError('required')">
+            Workspace is required
           </mat-error>
         </mat-form-field>
 
-        <p class="text-sm text-gray-400 mt-2">
-          User will be added as a member with their own private workspace in this group.
+        <p class="text-sm text-gray-400 mt-2" *ngIf="isAdminSelected">
+          Admins get access to all workspaces automatically. A personal workspace
+          will be created using their email.
+        </p>
+        <p class="text-sm text-gray-400 mt-2" *ngIf="!isAdminSelected">
+          User will be added to the team workspace and receive a personal
+          workspace.
         </p>
       </div>
 
@@ -82,8 +99,24 @@ export class AddUserDialogComponent {
   ) {
     this.form = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
-      groupId: [null as number | null, Validators.required],
+      userType: ['user', Validators.required],
+      workspaceId: [null as number | null, Validators.required],
     });
+
+    this.form.get('userType')?.valueChanges.subscribe(userType => {
+      const workspaceControl = this.form.get('workspaceId');
+      if (userType === 'admin') {
+        workspaceControl?.clearValidators();
+        workspaceControl?.setValue(null);
+      } else {
+        workspaceControl?.setValidators(Validators.required);
+      }
+      workspaceControl?.updateValueAndValidity();
+    });
+  }
+
+  get isAdminSelected(): boolean {
+    return this.form.get('userType')?.value === 'admin';
   }
 
   submit(): void {
@@ -93,9 +126,11 @@ export class AddUserDialogComponent {
     }
 
     const value = this.form.getRawValue();
+    const isAdmin = value.userType === 'admin';
     this.dialogRef.close({
       email: (value.email || '').trim().toLowerCase(),
-      groupId: Number(value.groupId),
+      isAdmin,
+      workspaceId: isAdmin ? undefined : Number(value.workspaceId),
     } as AddUserDialogResult);
   }
 }

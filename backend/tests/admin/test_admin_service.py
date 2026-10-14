@@ -14,7 +14,6 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi import HTTPException
 from src.admin.admin_service import AdminService
 from src.admin.dto.admin_response_dto import (
     AdminOverviewStats,
@@ -23,10 +22,7 @@ from src.admin.dto.admin_response_dto import (
     AdminActiveRole,
     AdminGenerationHealth,
     AdminMonthlyActiveUsers,
-    UserProvisioningStatus,
 )
-from src.groups.schema.group_model import GroupModel
-from src.users.user_model import UserModel, UserRoleEnum
 
 
 @pytest.mark.asyncio
@@ -127,14 +123,19 @@ async def test_get_generation_health():
 
 @pytest.mark.asyncio
 async def test_get_active_users_monthly():
+    from unittest.mock import patch
+    from datetime import datetime
+
     mock_repo = MagicMock()
     mock_repo.get_active_users_monthly_counts = AsyncMock(
         return_value={"2026-04": 3}
     )
 
-    service = AdminService(admin_repo=mock_repo)
-    result = await service.get_active_users_monthly()
-    assert len(result) == 7  # Default 180 days should yield 7 months
+    with patch("src.admin.admin_service.datetime") as mock_datetime:
+        mock_datetime.today.return_value = datetime(2026, 7, 1)
+        service = AdminService(admin_repo=mock_repo)
+        result = await service.get_active_users_monthly()
+        assert len(result) == 7  # Default 180 days should yield 7 months
 
 
 @pytest.mark.asyncio
@@ -148,222 +149,43 @@ async def test_cleanup_stuck_jobs():
 
 
 @pytest.mark.asyncio
-async def test_add_user_to_group_by_email_created():
-    mock_group_service = MagicMock()
-    mock_user_service = MagicMock()
-    mock_admin_repo = MagicMock()
-    mock_workspace_service = MagicMock()
-    mock_workspace_repo = MagicMock()
+async def test_add_admin_user_by_email_adds_to_admin_workspace():
+    """Granting platform admin must also add the user to the shared admin workspace."""
+    from src.users.user_model import UserModel, UserRoleEnum
 
-    provisioned_user = UserModel(
-        id=10,
-        email="new.user@example.com",
-        roles=[UserRoleEnum.USER],
-        name="New User",
-    )
-    group = GroupModel(
-        id=2,
-        name="Design",
-        shared_workspace_id=20,
-        members=[],
-        created_at="2026-01-01T00:00:00Z",
-        updated_at="2026-01-01T00:00:00Z",
-    )
     admin_user = UserModel(
-        id=1,
-        email="owner@example.com",
-        roles=[UserRoleEnum.ADMIN],
-        name="Owner",
+        id=99, email="new.admin@example.com", name="New Admin", roles=[]
     )
 
-    mock_user_service.create_or_restore_user_by_email_for_admin = AsyncMock(
-        return_value=(provisioned_user, "created")
-    )
-    mock_group_service.add_member_to_group = AsyncMock(return_value=group)
-    
-    # Mock workspace methods
-    mock_workspace_service.check_workspace_name_exists = AsyncMock(return_value=False)
-    mock_workspace_service.create_workspace = AsyncMock(
-        return_value=MagicMock(id=100, name="Design")
-    )
-    mock_workspace_repo.is_member = AsyncMock(return_value=False)
-    mock_workspace_repo.add_member_to_workspace = AsyncMock()
-    mock_workspace_repo.find_by_name = AsyncMock(return_value=None)
-    mock_workspace_service.workspace_repo = mock_workspace_repo
-
-    service = AdminService(
-        admin_repo=mock_admin_repo,
-        group_service=mock_group_service,
-        user_service=mock_user_service,
-        workspace_service=mock_workspace_service,
-    )
-    response = await service.add_user_to_group_by_email(
-        group_id=2,
-        email="new.user@example.com",
-        role="member",
-        admin_user=admin_user,
-    )
-
-    assert response.provisioning_status == UserProvisioningStatus.CREATED
-    assert response.created_new_user is True
-    assert response.user_id == 10
-    assert response.email == "new.user@example.com"
-    assert response.group.id == 2
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "status",
-    [
-        "existing",
-        "restored",
-    ],
-)
-async def test_add_user_to_group_by_email_existing_or_restored(status):
-    mock_group_service = MagicMock()
     mock_user_service = MagicMock()
-    mock_admin_repo = MagicMock()
-    mock_workspace_service = MagicMock()
-    mock_workspace_repo = MagicMock()
-
-    provisioned_user = UserModel(
-        id=11,
-        email="existing.user@example.com",
-        roles=[UserRoleEnum.USER],
-        name="Existing User",
-    )
-    group = GroupModel(
-        id=3,
-        name="Marketing",
-        shared_workspace_id=30,
-        members=[],
-        created_at="2026-01-01T00:00:00Z",
-        updated_at="2026-01-01T00:00:00Z",
-    )
-    admin_user = UserModel(
-        id=1,
-        email="owner@example.com",
-        roles=[UserRoleEnum.ADMIN],
-        name="Owner",
-    )
-
     mock_user_service.create_or_restore_user_by_email_for_admin = AsyncMock(
-        return_value=(provisioned_user, status)
+        return_value=(admin_user, "created")
     )
-    mock_group_service.add_member_to_group = AsyncMock(return_value=group)
-    
-    # Mock workspace methods
-    mock_workspace_service.check_workspace_name_exists = AsyncMock(return_value=False)
-    mock_workspace_service.create_workspace = AsyncMock(
-        return_value=MagicMock(id=100, name="Marketing")
-    )
-    mock_workspace_repo.is_member = AsyncMock(return_value=False)
-    mock_workspace_repo.add_member_to_workspace = AsyncMock()
-    mock_workspace_repo.find_by_name = AsyncMock(return_value=None)
-    mock_workspace_service.workspace_repo = mock_workspace_repo
-
-    service = AdminService(
-        admin_repo=mock_admin_repo,
-        group_service=mock_group_service,
-        user_service=mock_user_service,
-        workspace_service=mock_workspace_service,
-    )
-    response = await service.add_user_to_group_by_email(
-        group_id=3,
-        email="existing.user@example.com",
-        role="member",
-        admin_user=admin_user,
-    )
-
-    expected_status = (
-        UserProvisioningStatus.EXISTING
-        if status == "existing"
-        else UserProvisioningStatus.RESTORED
-    )
-    assert response.provisioning_status == expected_status
-    assert response.created_new_user is False
-    assert response.user_id == 11
-    assert response.group.id == 3
-
-
-@pytest.mark.asyncio
-async def test_add_user_to_group_by_email_conflict_propagates():
-    """Test that 409 CONFLICT is handled gracefully when user already in group.
-    
-    When add_member_to_group raises 409, the method should:
-    1. Catch the 409
-    2. Fetch the group directly to continue provisioning
-    3. Ensure workspace provisioning continues without raising
-    """
-    import datetime
-    
-    mock_group_service = MagicMock()
-    mock_user_service = MagicMock()
-    mock_admin_repo = MagicMock()
-    mock_workspace_service = MagicMock()
-
-    provisioned_user = UserModel(
-        id=12,
-        email="duplicate@example.com",
-        roles=[UserRoleEnum.USER],
-        name="Duplicate User",
-    )
-    admin_user = UserModel(
-        id=1,
-        email="owner@example.com",
-        roles=[UserRoleEnum.ADMIN],
-        name="Owner",
-    )
-    
-    group = GroupModel(
-        id=3,
-        name="Test Group",
-        shared_workspace_id=10,
-        created_at=datetime.datetime.now(),
-        updated_at=datetime.datetime.now(),
-    )
-
-    mock_user_service.create_or_restore_user_by_email_for_admin = AsyncMock(
-        return_value=(provisioned_user, "existing")
-    )
-    mock_group_service.add_member_to_group = AsyncMock(
-        side_effect=HTTPException(
-            status_code=409,
-            detail="User is already a member of this group.",
+    mock_user_service.ensure_user_is_platform_admin = AsyncMock(
+        return_value=UserModel(
+            id=99,
+            email="new.admin@example.com",
+            name="New Admin",
+            roles=[UserRoleEnum.USER, UserRoleEnum.ADMIN],
         )
     )
-    mock_group_service.group_repo = MagicMock()
-    mock_group_service.group_repo.get_by_id_with_members = AsyncMock(
-        return_value=group
-    )
-    
-    # Mock workspace service methods to be non-blocking
-    mock_workspace_service.workspace_repo = MagicMock()
-    mock_workspace_service.workspace_repo.is_member = AsyncMock(return_value=True)
-    mock_workspace_service.workspace_repo.find_by_name = AsyncMock(return_value=None)
-    mock_workspace_service.create_workspace = AsyncMock(
-        return_value=MagicMock(id=11, name="duplicate@example.com")
+
+    mock_workspace_service = MagicMock()
+    mock_workspace_service.add_user_to_admin_workspace = AsyncMock()
+    mock_workspace_service.ensure_personal_workspace = AsyncMock(
+        return_value=None
     )
 
     service = AdminService(
-        admin_repo=mock_admin_repo,
-        group_service=mock_group_service,
+        admin_repo=MagicMock(),
         user_service=mock_user_service,
         workspace_service=mock_workspace_service,
     )
 
-    # Should NOT raise exception despite 409
-    response = await service.add_user_to_group_by_email(
-        group_id=3,
-        email="duplicate@example.com",
-        role="member",
-        admin_user=admin_user,
+    result = await service.add_admin_user_by_email(
+        email="new.admin@example.com", admin_user=admin_user
     )
 
-    # Verify the method completed successfully
-    assert response.user_id == 12
-    assert response.email == "duplicate@example.com"
-    assert response.group.id == 3
-    
-    # Verify group was fetched after 409
-    mock_group_service.group_repo.get_by_id_with_members.assert_called_once_with(3)
+    mock_workspace_service.add_user_to_admin_workspace.assert_awaited_once()
+    assert result.user_id == 99
+    assert result.email == "new.admin@example.com"

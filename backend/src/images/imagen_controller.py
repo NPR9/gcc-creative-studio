@@ -62,9 +62,9 @@ async def generate_images(
     workspace_auth: WorkspaceAuth = Depends(),
 ) -> MediaItemResponse | None:
     try:
-        # Use our centralized dependency to authorize the user for the workspace
+        # Content creation is pinned to the caller's personal workspace
         # before proceeding with the expensive generation job.
-        await workspace_auth.authorize(
+        await workspace_auth.authorize_personal_workspace(
             workspace_id=image_request.workspace_id,
             user=current_user,
         )
@@ -101,7 +101,7 @@ async def generate_images_vto(
 ) -> MediaItemResponse | None:
     """Start an async VTO generation job. Returns immediately with a placeholder."""
     try:
-        await workspace_auth.authorize(
+        await workspace_auth.authorize_personal_workspace(
             workspace_id=image_request.workspace_id,
             user=current_user,
         )
@@ -159,7 +159,9 @@ async def upload_upscale(
     if file:
         file_bytes = await file.read()
         filename = file.filename
-    await workspace_auth.authorize(workspace_id=workspace_id, user=current_user)
+    await workspace_auth.authorize_personal_workspace(
+        workspace_id=workspace_id, user=current_user
+    )
 
     executor = request.app.state.executor
 

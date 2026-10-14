@@ -28,7 +28,7 @@ import {
 } from '../../../utils/handleMessageSnackbar';
 import {JobStatus} from '../../models/media-item.model';
 import {UserModel, UserRolesEnum} from '../../models/user.model';
-import {Workspace, WorkspaceScope} from '../../models/workspace.model';
+import {Workspace, WorkspaceType} from '../../models/workspace.model';
 import {BrandGuidelineService} from '../../services/brand-guideline/brand-guideline.service';
 import {UserService} from '../../services/user.service';
 import {environment} from '../../../../environments/environment';
@@ -53,9 +53,10 @@ export class WorkspaceSwitcherComponent implements OnInit {
   selectableWorkspaces: Workspace[] = [];
   activeWorkspaceId: number | null = null;
   activeWorkspace: Workspace | null = null;
+  assignedSharedWorkspace: Workspace | null = null;
   currentUser: UserModel | null;
   readonly JobStatus = JobStatus;
-  public WorkspaceScope = WorkspaceScope;
+  public WorkspaceType = WorkspaceType;
 
   isBrowser: boolean;
 
@@ -119,39 +120,43 @@ export class WorkspaceSwitcherComponent implements OnInit {
         handleErrorSnackbar(this.snackBar, error, 'Could not load workspaces');
       },
     });
+    this.workspaceService.getAssignedWorkspace().subscribe({
+      next: workspace => {
+        this.assignedSharedWorkspace = workspace;
+      },
+      error: () => {
+        this.assignedSharedWorkspace = null;
+      },
+    });
+  }
+
+  private findPersonalWorkspace(): Workspace | null {
+    if (!this.currentUser) return null;
+    return (
+      this.workspaces.find(
+        w =>
+          w.type === WorkspaceType.PERSONAL &&
+          w.ownerId === this.currentUser!.id,
+      ) ||
+      this.workspaces.find(w => w.type === WorkspaceType.PERSONAL) ||
+      null
+    );
   }
 
   private setWorkspaceCollections(workspaces: Workspace[]): void {
     this.workspaces = workspaces;
-    this.selectableWorkspaces = workspaces.filter(
-      workspace =>
-        workspace.scope === WorkspaceScope.PRIVATE ||
-        workspace.scope === WorkspaceScope.GLOBAL,
-    );
+    this.selectableWorkspaces = workspaces;
     this.initializeActiveWorkspace();
   }
 
   initializeActiveWorkspace(): void {
     if (!this.isBrowser) return;
 
-    const storedWorkspaceId = localStorage.getItem('activeWorkspaceId');
-    const queryParamId = this.route.snapshot.queryParamMap.get('workspaceId');
-
-    // Order of precedence: URL query param > localStorage > default public.
-    let preferredWorkspaceId: number | null = null;
-
-    if (queryParamId) {
-      preferredWorkspaceId = parseInt(queryParamId, 10);
-    } else if (storedWorkspaceId) {
-      preferredWorkspaceId = parseInt(storedWorkspaceId, 10);
-    }
-
-    if (
-      preferredWorkspaceId &&
-      !isNaN(preferredWorkspaceId) &&
-      this.selectableWorkspaces.some(w => w.id === preferredWorkspaceId)
-    ) {
-      this.setActiveWorkspace(preferredWorkspaceId);
+    // Generation and the personal gallery are always pinned to the user's
+    // personal workspace. Shared assets are viewed via the Shared Gallery.
+    const personalWorkspace = this.findPersonalWorkspace();
+    if (personalWorkspace) {
+      this.setActiveWorkspace(personalWorkspace.id);
       return;
     }
 
@@ -186,22 +191,22 @@ export class WorkspaceSwitcherComponent implements OnInit {
   get canAccessBrandGuidelines(): boolean {
     if (!this.currentUser || !this.activeWorkspace) return false;
 
-    // Anyone can access guidelines on a public workspace.
-    if (this.activeWorkspace.scope === WorkspaceScope.PUBLIC) return true;
-
-    // For private workspaces, only admins or owners can access.
     const isAdmin = !!this.currentUser.roles?.includes(UserRolesEnum.ADMIN);
-    const isOwnerOfPrivateWorkspace =
-      this.activeWorkspace.scope === WorkspaceScope.PRIVATE &&
-      this.currentUser.id === this.activeWorkspace.ownerId;
-    return isAdmin || isOwnerOfPrivateWorkspace;
+    const isWorkspaceAdmin = this.activeWorkspace.members?.some(
+      m => m.userId === this.currentUser!.id && m.role === 'admin',
+    );
+    const isOwner = this.currentUser.id === this.activeWorkspace.ownerId;
+    return isAdmin || isWorkspaceAdmin || isOwner;
   }
 
   get canPerformEditActionsOnBrandGuidelines(): boolean {
     if (!this.currentUser || !this.activeWorkspace) return false;
     const isAdmin = !!this.currentUser.roles?.includes(UserRolesEnum.ADMIN);
+    const isWorkspaceAdmin = this.activeWorkspace.members?.some(
+      m => m.userId === this.currentUser!.id && m.role === 'admin',
+    );
     const isOwner = this.currentUser.id === this.activeWorkspace.ownerId;
-    return isAdmin || isOwner;
+    return isAdmin || isWorkspaceAdmin || isOwner;
   }
 
   openBrandGuidelinesDialog(event: MouseEvent): void {

@@ -36,16 +36,24 @@
     </h1>
     <p class="login-app-text">
       <span class="linear-text">Create</span> at the speed <br />
-      of <span class="linear-text">thought</span> 🚀
+      of <span class="linear-text">thought</span>
     </p>
-    <button
-      mat-raised-button
-      color="primary"
-      (click)="loginWithGoogle()"
-      class="w-full max-w-xs h-12 text-lg"
-    >
-      Login with Google
-    </button>
+    <ng-container *ngIf="isLocal; else iapMobile">
+      <p class="text-sm font-normal opacity-80">
+        Local mode — continue as {{ localUserEmail }}
+      </p>
+      <button
+        mat-raised-button
+        color="primary"
+        (click)="continueSession()"
+        class="w-full max-w-xs h-12 text-lg"
+      >
+        Continue
+      </button>
+    </ng-container>
+    <ng-template #iapMobile>
+      <p class="text-sm font-normal opacity-80">Signing you in via IAP…</p>
+    </ng-template>
     <mat-spinner class="mt-5" [diameter]="50" *ngIf="this.loader"></mat-spinner>
   </div>
 
@@ -53,7 +61,7 @@
   <div class="hidden lg:flex flex-col justify-center items-center gap-4 z-10">
     <p class="login-app-text text-4xl">
       <span class="linear-text">Create</span> at the speed <br />
-      of <span class="linear-text">thought</span> 🚀
+      of <span class="linear-text">thought</span>
     </p>
   </div>
 
@@ -68,17 +76,24 @@
         </mat-card-title>
       </mat-card-header>
       <mat-card-content class="flex flex-col items-center">
-        <p class="register-text mb-4">
-          Single Sign on with your Google Account
-        </p>
-        <button
-          mat-raised-button
-          color="primary"
-          (click)="loginWithGoogle()"
-          class="w-full h-12 text-lg login-btn"
-        >
-          Login with Google
-        </button>
+        <ng-container *ngIf="isLocal; else iapDesktop">
+          <p class="register-text mb-4 font-normal">
+            Local development — continue as {{ localUserEmail }}
+          </p>
+          <button
+            mat-raised-button
+            color="primary"
+            (click)="continueSession()"
+            class="w-full h-12 text-lg login-btn"
+          >
+            Continue
+          </button>
+        </ng-container>
+        <ng-template #iapDesktop>
+          <p class="register-text mb-4 font-normal">
+            Authenticated by Identity-Aware Proxy. Loading your profile…
+          </p>
+        </ng-template>
         <mat-spinner
           class="mt-5 m-auto"
           [diameter]="50"

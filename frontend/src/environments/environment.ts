@@ -15,20 +15,15 @@
  */
 
 export const environment = {
-  firebase: {
-    apiKey: '',
-    authDomain: '',
-    projectId: '',
-    storageBucket: '',
-    messagingSenderId: '',
-    appId: '',
-    measurementId: '',
-  },
   production: true,
   isLocal: false,
-  backendURL: 'http://localhost:8080/api',
+  // Same-origin /api — nginx on Cloud Run proxies to the backend.
+  backendURL: '/api',
   EMAIL_REGEX:
     /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
   ADMIN: 'admin',
-  GOOGLE_CLIENT_ID: '',
+  /** IAP OAuth client ID — used only for logout redirect in deployed envs. */
+  iapClientId: '',
+  /** Local-only default identity (ignored when isLocal is false). */
+  localUserEmail: '',
 };

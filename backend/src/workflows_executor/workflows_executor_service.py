@@ -22,6 +22,10 @@ from httpx import AsyncClient as RestClient
 from src.common.schema.genai_model_setup import GenAIModelSetup
 from src.common.schema.media_item_model import AssetRoleEnum
 from src.config.config_service import config_service
+from src.usage.genai_usage_tracker import (
+    extract_token_usage,
+    record_genai_usage,
+)
 from src.workflows.schema.workflow_model import ReferenceMediaOrAsset
 from src.workflows_executor.dto.workflows_executor_dto import (
     EditImageRequest,
@@ -279,6 +283,7 @@ class WorkflowsExecutorService:
             contents.extend(video_parts)
 
         text = ""
+        last_chunk = None
         # Note: The original code used a stream but returned the full text at the end.
         # Keeping this behavior for now.
         for chunk in self.genai_client.models.generate_content_stream(
@@ -286,8 +291,24 @@ class WorkflowsExecutorService:
             contents=contents,
             config=generate_content_config,
         ):
+            last_chunk = chunk
             if chunk.text:
                 text += chunk.text
+        if last_chunk is not None:
+            (
+                prompt_tokens,
+                candidates_tokens,
+                thoughts_tokens,
+                total_tokens,
+            ) = extract_token_usage(last_chunk)
+            await record_genai_usage(
+                model=request.config.model,
+                feature="workflows_generate_text",
+                prompt_token_count=prompt_tokens,
+                candidates_token_count=candidates_tokens,
+                thoughts_token_count=thoughts_tokens,
+                total_token_count=total_tokens,
+            )
         return {"generated_text": text}
 
     async def generate_image(
@@ -306,6 +327,7 @@ class WorkflowsExecutorService:
             "aspect_ratio": request.config.aspect_ratio,
             "use_brand_guidelines": request.config.brand_guidelines,
             "number_of_media": 1,
+            "resolution": request.config.resolution,
         }
 
         headers = {"Authorization": authorization} if authorization else {}
@@ -355,6 +377,7 @@ class WorkflowsExecutorService:
             "number_of_media": 1,
             "source_media_items": media_items,
             "source_asset_ids": asset_ids,
+            "resolution": request.config.resolution,
         }
 
         headers = {"Authorization": authorization} if authorization else {}
@@ -423,6 +446,7 @@ class WorkflowsExecutorService:
             "prompt": request.inputs.prompt,
             "workspace_id": request.workspace_id,
             "generation_model": request.config.model,
+            "resolution": request.config.resolution,
             "use_brand_guidelines": request.config.brand_guidelines,
             "reference_images": reference_images,
             "source_media_items": media_items,

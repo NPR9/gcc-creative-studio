@@ -23,7 +23,6 @@ import {
 import {MatSnackBar} from '@angular/material/snack-bar';
 import {MatDialog} from '@angular/material/dialog';
 import {OnInit} from '@angular/core';
-import {MatSelectChange} from '@angular/material/select';
 import {finalize} from 'rxjs';
 import {DomSanitizer, SafeResourceUrl} from '@angular/platform-browser';
 import {WorkspaceStateService} from '../services/workspace/workspace-state.service';
@@ -223,14 +222,14 @@ export class AudioComponent implements OnInit {
     return this.sanitizer.bypassSecurityTrustResourceUrl(url);
   }
 
-  onVoiceSelectionChange(event: MatSelectChange) {
-    const value = event.value as string;
+  onVoiceSelectionChange(value: string) {
     if (value === 'add-new-voice') {
       this.openAddVoiceDialog();
       this.selectedVoice = '';
     } else {
       this.selectedVoice = value;
     }
+    this.saveState();
   }
 
   openAddVoiceDialog() {

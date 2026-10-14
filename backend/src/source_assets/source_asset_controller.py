@@ -73,12 +73,18 @@ async def upload_source_asset(
     - **workspace_id**: The ID of the workspace to upload the asset to.
     - **assetType**: Set the asset's type. Defaults to 'generic_image'.
     """
-    # Use our centralized dependency to authorize the user for the workspace
-    # before proceeding with the upload.
-    await workspace_auth.authorize(
-        workspace_id=workspaceId,
-        user=current_user,
-    )
+    # Content creation is pinned to the caller's personal workspace. System
+    # assets (admin-only) may target a shared/system workspace instead.
+    if scope == AssetScopeEnum.SYSTEM:
+        await workspace_auth.authorize(
+            workspace_id=workspaceId,
+            user=current_user,
+        )
+    else:
+        await workspace_auth.authorize_personal_workspace(
+            workspace_id=workspaceId,
+            user=current_user,
+        )
 
     contents = await file.read()
     return await service.upload_asset(

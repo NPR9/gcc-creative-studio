@@ -16,12 +16,13 @@
 
 import {Component, Inject, OnInit} from '@angular/core';
 import {MAT_DIALOG_DATA, MatDialogRef} from '@angular/material/dialog';
-import {Workspace} from '../../models/workspace.model';
+import {Workspace, WorkspaceType} from '../../models/workspace.model';
 import {WorkspaceService} from '../../../services/workspace/workspace.service';
 import {WorkspaceStateService} from '../../../services/workspace/workspace-state.service';
 
 export interface CopyToWorkspaceDialogData {
   itemCount: number;
+  teamWorkspacesOnly?: boolean;
 }
 
 @Component({
@@ -50,12 +51,15 @@ export class CopyToWorkspaceDialogComponent implements OnInit {
   }
 
   loadWorkspaces(): void {
-    this.workspaceService.getWorkspaces().subscribe({
+    this.workspaceService.getSwitcherWorkspaces().subscribe({
       next: workspaces => {
-        // Filter out the current workspace (no point in copying to itself)
-        this.workspaces = workspaces.filter(
+        let filtered = workspaces.filter(
           w => w.id !== this.currentWorkspaceId,
         );
+        if (this.data.teamWorkspacesOnly) {
+          filtered = filtered.filter(w => w.type === WorkspaceType.TEAM);
+        }
+        this.workspaces = filtered;
       },
       error: err => {
         console.error('Failed to load workspaces', err);

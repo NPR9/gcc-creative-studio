@@ -19,23 +19,16 @@
   font-family: 'Google Sans', sans-serif;
   background-color: transparent;
   color: #E3E3E3;
-
-  app-storyboard {
-    width: 100%;
-    height: 100%;
-    display: block;
-    overflow: hidden;
-  }
 }
 
 .workbench-container {
    position: relative;
-   --max-container-width: 1600px;
+   --max-container-width: 1400px;
    background-color: transparent;
    padding: 20px 40px;
    max-width: var(--max-container-width);
    margin: 0 auto;
-   margin-top: calc(5vh + 0px);
+   margin-top: calc(10vh + 0px);
    margin-left: max(calc(5vw + 4.5rem), calc(50% - var(--max-container-width) / 2));
 }
 
@@ -53,6 +46,9 @@
 
 
 .beta-label {
+   position: absolute;
+   top: -2rem;
+   right: 0;
    display: flex;
    align-items: center;
    gap: 6px;
@@ -128,18 +124,13 @@
    display: flex;
    flex-direction: column;
    padding: 24px;
-   min-width: 24rem;
-      max-width: 30rem;
-      min-height: 650px;
-      max-height: 800px;
+   min-width: 20rem;
+   max-width: 24rem;
+   min-height: 500px;
+   max-height: 600px;
    border-radius: 12px;
-   overflow-y: auto;
+   overflow-y: scroll;
    scroll-behavior: smooth;
-
-   &.no-scroll {
-      overflow-y: hidden;
-      height: 800px;
-   }
 }
 
 .drop-zone {
@@ -232,62 +223,3 @@
    border: 1px solid white;
 }
 
-/* Agent Chat Styles */
-.chat-bubble {
-   max-width: 85%;
-   padding: 10px 14px;
-   border-radius: 16px;
-   word-break: break-word;
-
-   &.user {
-      background-color: #3b82f6;
-      /* Blue */
-      color: white;
-      align-self: flex-end;
-      border-bottom-right-radius: 4px;
-   }
-
-   &.agent {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-      color: #E3E3E3;
-      align-self: flex-start;
-      border-bottom-left-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-   }
-}
-
-.typing-indicator {
-   display: flex;
-   gap: 4px;
-   padding: 4px 0;
-   align-items: center;
-
-   span {
-      width: 6px;
-      height: 6px;
-      background-color: #E3E3E3;
-      border-radius: 50%;
-      animation: bounce 1.4s infinite ease-in-out both;
-
-      &:nth-child(1) {
-         animation-delay: -0.32s;
-      }
-
-      &:nth-child(2) {
-         animation-delay: -0.16s;
-      }
-   }
-}
-
-@keyframes bounce {
-
-   0%,
-   80%,
-   100% {
-      transform: scale(0);
-   }
-
-   40% {
-      transform: scale(1.0);
-   }
-}
