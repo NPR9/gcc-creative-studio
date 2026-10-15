@@ -2,7 +2,7 @@ name: Polaris Vulnerability Scan
 on:
   push:
     ### run scans on each push to branches
-    branches: [ develop, prod ]
+    branches: [ test, prod ]
     ### run scans on each push to specific file. you may want to run only scans when you push changes about your dependecies. e.g gradle.build, maven etc.
     
       
