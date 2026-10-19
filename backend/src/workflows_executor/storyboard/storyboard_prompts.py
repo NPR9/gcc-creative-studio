@@ -16,204 +16,516 @@
 
 Kept separate from the executor service so prompts can be tuned (and
 reviewed) without touching orchestration code.
+
+The structure mirrors the studio's house storyboard format: a character
+sheet first, then per scene a Type / Context / voiceover / shot list /
+visual style block with its numbered frames.
 """
 
+import json
+from collections.abc import Iterator
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+BoardType = Literal["shot_by_shot", "moodboard"]
+Revision = Literal["keep", "edit", "redraw", "new"]
 
 # =========================================
 # Structured output schema (Gemini response_schema)
 # =========================================
 
 
-class StoryboardShot(BaseModel):
-    """One frame / beat of the storyboard."""
+class StoryboardCharacter(BaseModel):
+    """A recurring person. Gets a character sheet used as frame reference."""
 
-    shot_number: int = Field(description="1-based order of the shot.")
-    beat: str = Field(
+    key: str = Field(description="Short id used by shots, e.g. 'astrid'.")
+    name: str
+    role: str = Field(description="e.g. Sales rep in Paris.")
+    look: str = Field(
         description=(
-            "Narrative role of the shot, e.g. Hook, Problem, Product, "
-            "Benefit, Proof, Call to action."
+            "Precise physical description: age, build, face, hair, "
+            "glasses, skin tone, distinguishing features."
         ),
     )
-    duration_seconds: float = Field(description="Planned screen time.")
-    shot_type: str = Field(
-        description="Framing: Wide, Medium, Close-up, Macro, Over-shoulder.",
-    )
-    camera_movement: str = Field(
-        description="Static, Slow push-in, Pan left, Handheld, Top-down.",
-    )
-    action: str = Field(
-        description="What happens in the shot, in plain words.",
-    )
+    wardrobe: str = Field(description="Outfit worn throughout the film.")
+
+
+class StoryboardShot(BaseModel):
+    """One frame of the board."""
+
+    shot_number: int = Field(description="Running number across the board.")
+    shot_type: str = Field(description="Wide, Medium, Close-up, Macro, POV.")
+    camera_movement: str = Field(description="Static, Push-in, Pan, Drone.")
+    action: str = Field(description="One-line caption of what happens.")
     on_screen_text: str | None = Field(
         default=None,
-        description="Super / title card copy, if any.",
+        description="Super or title copy, if any.",
     )
-    voiceover: str | None = Field(
-        default=None,
-        description="Voiceover or dialogue line, if any.",
+    characters: list[str] = Field(
+        default_factory=list,
+        description="Keys of characters visible in this frame.",
     )
-    sound_notes: str | None = Field(
-        default=None,
-        description="Music / SFX direction, if any.",
+    needs_real_screenshot: bool = Field(
+        default=False,
+        description=(
+            "True when the frame must show a real product interface; the "
+            "central team will insert the real screenshot."
+        ),
     )
     visual_prompt: str = Field(
         description=(
-            "Self-contained image-generation description of this single "
-            "frame: subject, setting, composition, lighting. No text in image."
+            "Self-contained description of this single frame: subject, "
+            "setting, composition, lighting. No text or logos."
         ),
     )
+    revision: Revision = Field(
+        default="new",
+        description="Revisions only: keep, edit, redraw or new.",
+    )
+    source_shot_number: int | None = Field(
+        default=None,
+        description="Revisions only: the earlier shot this one keeps or edits.",
+    )
+    edit_instruction: str | None = Field(
+        default=None,
+        description="Revisions only, for edit: only the change to make.",
+    )
+
+
+class StoryboardScene(BaseModel):
+    """A scene in the house format."""
+
+    scene_number: int
+    title: str
+    scene_type: str = Field(
+        description="e.g. Establishing, Product introduction, Payoff.",
+    )
+    timing: str | None = Field(
+        default=None,
+        description="Time range from the brief, e.g. '0-15s'.",
+    )
+    context: str = Field(description="What the scene does in the story.")
+    voiceover: list[str] = Field(
+        default_factory=list,
+        description="Voiceover lines for this scene, verbatim from the brief.",
+    )
+    visual_style: str
+    shots: list[StoryboardShot]
 
 
 class StoryboardPlan(BaseModel):
     """Full storyboard plan returned by the reasoning model."""
 
     title: str
-    objective: str = Field(description="What the video must achieve.")
+    objective: str
     target_audience: str
-    channel_and_format: str = Field(
-        description="Where it runs and how, e.g. Instagram Reels 9:16, 15s.",
-    )
+    channel_and_format: str
     total_duration_seconds: float
     key_message: str
     visual_bible: str = Field(
         description=(
-            "Continuity sheet applied to every frame: recurring characters "
-            "(age, look, wardrobe), locations, products and packaging, colour "
-            "palette, lighting mood. Concrete and visual."
+            "Continuity sheet for every frame: locations, products and "
+            "packaging, colour palette, lighting mood. Concrete and visual."
         ),
     )
+    characters: list[StoryboardCharacter] = Field(default_factory=list)
     assumptions: list[str] = Field(
         description="Every decision taken that the brief did not specify.",
     )
     open_questions: list[str] = Field(
-        description=(
-            "Questions the requester must answer before production. "
-            "Empty list if none."
-        ),
+        description="Questions to answer before production. May be empty.",
     )
-    shots: list[StoryboardShot]
+    scenes: list[StoryboardScene]
+
+    def all_shots(self) -> Iterator[tuple[StoryboardScene, StoryboardShot]]:
+        for scene in self.scenes:
+            for shot in scene.shots:
+                yield scene, shot
+
+    def shot_count(self) -> int:
+        return sum(len(scene.shots) for scene in self.scenes)
+
+    def cap_and_renumber(self, max_frames: int) -> None:
+        """Enforce the frame budget and renumber shots 1..N in order."""
+        remaining = max_frames
+        kept_scenes = []
+        for scene in self.scenes:
+            if remaining <= 0:
+                break
+            scene.shots = scene.shots[:remaining]
+            remaining -= len(scene.shots)
+            if scene.shots:
+                kept_scenes.append(scene)
+        self.scenes = kept_scenes
+        number = 0
+        for scene_index, scene in enumerate(self.scenes, start=1):
+            scene.scene_number = scene_index
+            for shot in scene.shots:
+                number += 1
+                shot.shot_number = number
 
 
 # =========================================
-# Reasoning prompt
+# Planning prompt
 # =========================================
 
-STORYBOARD_SYSTEM_PROMPT = """\
-You are a senior creative director and storyboard artist working inside a
-brand's in-house creative studio. Country marketing managers come to you with
-short, informal descriptions of a video they want. Your job is to turn that
-description into a production-ready storyboard plan that the central creative
-team can execute without a follow-up meeting.
+_PLANNER_PROMPT = """\
+You are a senior creative director and storyboard artist in a brand's
+in-house creative studio. Country marketing managers send you a video brief.
+It may be a one-line idea or a full script with voiceover, scene breakdowns,
+timings and messaging pillars. Turn it into a storyboard plan the central
+creative team can work from.
 
-Work in this order:
-1. Extract the brief: objective, audience, channel, format, duration, key
-   message, mandatory elements (products, offers, legal lines, logos, dates).
-2. Fill gaps with sensible defaults for the channel, and record EVERY default
-   you chose in `assumptions`. Never silently invent offers, prices, dates,
-   legal claims or product names. If one of those is needed but missing,
-   add it to `open_questions` and use a clear placeholder like [PRICE] in
-   on-screen text.
-3. Write a `visual_bible` first, then the shots. Every shot must be visually
-   consistent with the bible: same people, same wardrobe, same products, same
-   location look, same palette.
-4. Structure the shots as a story with a clear hook in the first 2 seconds,
-   one key message, and an explicit call to action at the end. Shot durations
-   must add up to `total_duration_seconds`.
-5. Write each `visual_prompt` as a single frame an illustrator could draw:
-   who/what is in frame, where, composition and camera angle, lighting.
-   Do not put any words, captions, logos or UI inside the visual_prompt;
-   text belongs in `on_screen_text`.
+Script fidelity (most important):
+- If the brief contains voiceover lines, copy them VERBATIM into the
+  `voiceover` of the scene they belong to. Never rewrite, shorten or
+  "improve" the client's script. Keep the brief's scene order, scene titles
+  and timings when it has them.
+- If the brief has bracketed or described visual directions, turn those
+  into shots; do not replace them with your own ideas.
+- Only when the brief is a short idea with no script, write a concise
+  voiceover yourself and say so in `assumptions`.
 
-Rules:
-- Number of shots: between {min_frames} and {max_frames}, unless the brief
-  explicitly asks for a different number.
-- Write `action`, `on_screen_text`, `voiceover`, `assumptions` and
-  `open_questions` in {language}. Write `visual_prompt` and `visual_bible`
-  in English (they feed the image model).
-- Avoid real, identifiable people, celebrities, and third-party brands or
-  logos unless the brief supplies them as reference images.
-- If reference images are attached, treat them as the source of truth for
-  products, packaging, people and locations, and describe them precisely in
-  the visual bible.
-- Be concise. This is a working document, not a pitch.
+Plan in this order:
+1. Extract objective, audience, channel and format, duration, key message,
+   mandatory elements. Record every default you choose in `assumptions`.
+   Never invent prices, dates, offers, legal claims or product names: add
+   them to `open_questions` and use placeholders like [PRICE].
+2. Characters: list every person who appears in more than one shot, with a
+   precise `look` and `wardrobe`. These become character sheets, so be
+   specific (age, hair, glasses, outfit colours). Reference them by `key` in
+   each shot's `characters`. If a recurring person is not described in the
+   brief, design one that fits the audience and note it in `assumptions`.
+3. Write the `visual_bible` (locations, products, palette, light).
+4. Scenes, in the house format: title, `scene_type`, timing, context,
+   voiceover, `visual_style`, then the shots.
+{board_rules}
+Frame budget: at most {max_frames} shots in total. If the script needs more,
+keep one strong shot per key beat and list the merged beats in
+`assumptions`. Spend the budget evenly; do not use it all on early scenes.
+
+Rules for every shot:
+- `visual_prompt` describes ONE photographable frame: who, where, framing,
+  camera angle, light. It must work on its own without the other shots.
+- Never put words, captions, logos, brand names, signage text or UI text in
+  `visual_prompt`. Brand logos are placed later by the central team. Text
+  belongs in `on_screen_text`.
+- No real celebrities, no identifiable public figures, no third-party brands
+  (airlines, car makers, sponsors, competitors). Real cities and landmarks
+  are fine.
+- When a shot must show a real product interface (an app, a website, a
+  dashboard of a named product), set `needs_real_screenshot` true and
+  describe the device with its screen softly lit and blank.
+- Write captions, voiceover, assumptions and questions in {language}; write
+  `visual_prompt`, `look`, `wardrobe` and `visual_bible` in English.
+- Leave `revision`, `source_shot_number` and `edit_instruction` at defaults.
 {brand_context_block}"""
+
+_SHOT_BY_SHOT_RULES = """\
+Board type: shot by shot. Each scene gets 2 to 8 shots that tell the scene
+in order, like a film. Vary framing (wide, medium, close-up) and keep
+continuity of people, wardrobe and location inside a scene.
+"""
+
+_MOODBOARD_RULES = """\
+Board type: mood board. Make one scene per voiceover line or beat of the
+script, in order, with that line as the scene's voiceover. Each scene's
+shots are {options} DIFFERENT visual options for the same line (different
+places, angles, moods), so the team can pick a look. They are alternatives,
+not a sequence.
+"""
 
 
 def build_system_prompt(
     *,
     language: str,
-    min_frames: int,
     max_frames: int,
+    board_type: BoardType,
+    options_per_beat: int,
     brand_context: str | None,
 ) -> str:
-    brand_context_block = ""
+    board_rules = (
+        _MOODBOARD_RULES.format(options=options_per_beat)
+        if board_type == "moodboard"
+        else _SHOT_BY_SHOT_RULES
+    )
+    return _PLANNER_PROMPT.format(
+        language=language,
+        max_frames=max_frames,
+        board_rules=board_rules,
+        brand_context_block=_brand_block(brand_context),
+    )
+
+
+def _brand_block(brand_context: str | None) -> str:
     if brand_context and brand_context.strip():
-        brand_context_block = (
+        return (
             "\nBrand context supplied by the studio (follow it):\n"
             f"{brand_context.strip()}\n"
         )
-    return STORYBOARD_SYSTEM_PROMPT.format(
-        language=language,
-        min_frames=min_frames,
-        max_frames=max_frames,
-        brand_context_block=brand_context_block,
-    )
+    return ""
 
 
 def build_user_prompt(
     brief: str, aspect_ratio: str, has_references: bool
 ) -> str:
     refs = (
-        "Reference images are attached after this message."
+        "Reference images are attached after this message. Treat them as "
+        "the source of truth for products, people and places."
         if has_references
         else "No reference images were provided."
     )
     return (
-        f'Video request from the country team:\n"""\n{brief.strip()}\n"""\n\n'
-        f"Frame aspect ratio for the storyboard: {aspect_ratio}.\n{refs}\n"
+        f'Video brief from the country team:\n"""\n{brief.strip()}\n"""\n\n'
+        f"Frame aspect ratio: {aspect_ratio}.\n{refs}\n"
         "Return the storyboard plan."
     )
 
 
 # =========================================
-# Frame (image) prompt
+# Revisions: the model returns only the changes; code applies them
+# =========================================
+
+
+class ShotChange(BaseModel):
+    """One requested change to the board."""
+
+    op: Literal["edit", "redraw", "remove", "add_after"] = Field(
+        description=(
+            "edit: small visual change to an existing frame; redraw: same "
+            "beat, new picture; remove: drop the shot; add_after: insert a "
+            "new shot after shot_number (0 = at the very start)."
+        ),
+    )
+    shot_number: int = Field(description="Current number of the shot.")
+    edit_instruction: str | None = Field(
+        default=None,
+        description="edit only: the change, e.g. 'Make it night'.",
+    )
+    shot: StoryboardShot | None = Field(
+        default=None,
+        description="redraw and add_after: the full new shot.",
+    )
+
+
+class VoiceoverChange(BaseModel):
+    scene_number: int
+    voiceover: list[str]
+
+
+class StoryboardRevision(BaseModel):
+    """Only what the notes ask to change."""
+
+    changes: list[ShotChange] = Field(default_factory=list)
+    character_changes: list[StoryboardCharacter] = Field(
+        default_factory=list,
+        description="Characters whose look or wardrobe the notes change.",
+    )
+    voiceover_changes: list[VoiceoverChange] = Field(default_factory=list)
+    new_assumptions: list[str] = Field(default_factory=list)
+    new_open_questions: list[str] = Field(default_factory=list)
+
+
+REVISION_SYSTEM_PROMPT = """\
+You revise an existing storyboard. You get the current plan as JSON and the
+requester's change notes (some notes name frames as "Frame 3: ...").
+Return ONLY the changes the notes ask for, as a list of operations:
+- edit: a small visual change to an existing frame (lighting, an object
+  added or removed, expression, time of day, colour, camera distance).
+  Write `edit_instruction` with ONLY the change.
+- redraw: same beat, substantially different picture. Give the full new
+  `shot` (keep its shot_number).
+- remove: drop the shot.
+- add_after: a new shot inserted after `shot_number` (0 = at the start).
+  Give the full new `shot`.
+A note about a whole scene applies to every shot in that scene.
+If the notes change a character's look or wardrobe, put the updated
+character in `character_changes`; its shots are redrawn automatically.
+Change the voiceover only when the notes ask; then give the scene's full
+new voiceover lines. Never touch what the notes do not mention.
+Same rules as before: no words, logos or brands in visual prompts; captions
+in {language}, visual prompts in English.
+{brand_context_block}"""
+
+
+def build_revision_prompts(
+    *,
+    current_plan: dict,
+    change_notes: str,
+    language: str,
+    brand_context: str | None,
+) -> tuple[str, str]:
+    system = REVISION_SYSTEM_PROMPT.format(
+        language=language,
+        brand_context_block=_brand_block(brand_context),
+    )
+    user = (
+        "Current storyboard plan:\n"
+        f"{json.dumps(current_plan, ensure_ascii=False)}\n\n"
+        f'Change notes from the requester:\n"""\n{change_notes.strip()}\n"""\n'
+        "Return only the changes."
+    )
+    return system, user
+
+
+def apply_revision(
+    plan: StoryboardPlan, revision: StoryboardRevision
+) -> StoryboardPlan:
+    """Applies the changes deterministically and marks each shot's revision.
+
+    Untouched shots become `keep`, so the model cannot silently rewrite
+    parts of the board the requester did not mention.
+    """
+    result = plan.model_copy(deep=True)
+    by_number = {shot.shot_number: shot for _, shot in result.all_shots()}
+    changed_keys = {c.key for c in revision.character_changes}
+
+    for _, shot in result.all_shots():
+        shot.revision = "keep"
+        shot.source_shot_number = shot.shot_number
+        shot.edit_instruction = None
+        if changed_keys.intersection(shot.characters):
+            shot.revision = "redraw"
+
+    removed: set[int] = set()
+    inserts: dict[int, list[StoryboardShot]] = {}
+    for change in revision.changes:
+        target = by_number.get(change.shot_number)
+        if change.op == "add_after" and change.shot:
+            new_shot = change.shot.model_copy()
+            new_shot.revision = "new"
+            new_shot.source_shot_number = None
+            inserts.setdefault(change.shot_number, []).append(new_shot)
+        elif target is None:
+            continue
+        elif change.op == "remove":
+            removed.add(change.shot_number)
+        elif change.op == "edit" and target.revision != "redraw":
+            target.revision = "edit"
+            target.edit_instruction = change.edit_instruction
+        elif change.op in ("redraw", "edit"):
+            if change.shot:
+                for name in StoryboardShot.model_fields:
+                    if name not in ("shot_number", "revision"):
+                        setattr(target, name, getattr(change.shot, name))
+            target.revision = "redraw"
+            target.source_shot_number = change.shot_number
+
+    for scene in result.scenes:
+        rebuilt: list[StoryboardShot] = []
+        if scene is result.scenes[0]:
+            rebuilt.extend(inserts.get(0, []))
+        for shot in scene.shots:
+            original = shot.source_shot_number
+            if original not in removed:
+                rebuilt.append(shot)
+            rebuilt.extend(inserts.get(original, []))
+        scene.shots = rebuilt
+    result.scenes = [scene for scene in result.scenes if scene.shots]
+
+    characters = {c.key: c for c in result.characters}
+    for character in revision.character_changes:
+        characters[character.key] = character
+    result.characters = list(characters.values())
+    for vo in revision.voiceover_changes:
+        for scene in result.scenes:
+            if scene.scene_number == vo.scene_number:
+                scene.voiceover = vo.voiceover
+    result.assumptions = result.assumptions + revision.new_assumptions
+    result.open_questions = result.open_questions + revision.new_open_questions
+    return result
+
+
+# =========================================
+# Image prompts
 # =========================================
 
 FRAME_STYLE_PREFIXES: dict[str, str] = {
-    "sketch": (
-        "Storyboard frame, loose pencil and grey marker sketch on white paper, "
-        "clean confident linework, simple tonal shading, no colour."
+    "photo_previz": (
+        "Photorealistic cinematic film still, shot on a cinema camera, "
+        "natural and motivated lighting, realistic people and materials, "
+        "storyboard reference quality."
     ),
     "rough_color": (
         "Storyboard frame, loose hand-drawn illustration with flat marker "
         "colours, clear silhouettes, readable composition, previz quality."
     ),
-    "photo_previz": (
-        "Photographic previsualisation frame, natural lighting, realistic but "
-        "unpolished, like a reference still from a location scout."
+    "sketch": (
+        "Storyboard frame, loose pencil and grey marker sketch on white paper, "
+        "clean confident linework, simple tonal shading, no colour."
     ),
 }
 
-DEFAULT_FRAME_STYLE = "rough_color"
+DEFAULT_FRAME_STYLE = "photo_previz"
+
+_NO_TEXT_RULE = (
+    "Do not render any text, letters, captions, subtitles, logos, brand "
+    "marks, signage text, user-interface text, watermarks, panel borders or "
+    "frame numbers."
+)
 
 
-def build_frame_prompt(
-    shot: StoryboardShot,
-    plan: StoryboardPlan,
-    style: str,
+def build_character_sheet_prompt(
+    character: StoryboardCharacter, style: str
 ) -> str:
     prefix = FRAME_STYLE_PREFIXES.get(
         style, FRAME_STYLE_PREFIXES[DEFAULT_FRAME_STYLE]
     )
     return (
         f"{prefix}\n"
-        f"Frame {shot.shot_number} of {len(plan.shots)}. "
-        f"{shot.shot_type}, camera: {shot.camera_movement}.\n"
-        f"Scene: {shot.visual_prompt}\n"
-        f"Continuity, keep identical across all frames: {plan.visual_bible}\n"
-        "Do not render any text, letters, captions, subtitles, logos, "
-        "watermarks, panel borders or frame numbers in the image."
+        f"Character reference sheet for a film: {character.name}, "
+        f"{character.role}. Look: {character.look}. "
+        f"Wardrobe: {character.wardrobe}.\n"
+        "Layout on a plain light grey studio background: full-body "
+        "turnaround in front, three-quarter, side and back views, plus a "
+        "row of head-and-shoulder close-ups showing neutral, smiling, "
+        "focused and concerned expressions. The same face, hair and outfit "
+        "in every view.\n"
+        f"{_NO_TEXT_RULE}"
+    )
+
+
+def build_frame_prompt(
+    shot: StoryboardShot,
+    scene: StoryboardScene,
+    plan: StoryboardPlan,
+    style: str,
+    has_character_refs: bool,
+) -> str:
+    prefix = FRAME_STYLE_PREFIXES.get(
+        style, FRAME_STYLE_PREFIXES[DEFAULT_FRAME_STYLE]
+    )
+    parts = [
+        prefix,
+        f"Scene: {scene.title}. {shot.shot_type}, camera: "
+        f"{shot.camera_movement}.",
+        f"Frame: {shot.visual_prompt}",
+        f"Scene look: {scene.visual_style}",
+        f"Continuity for the whole film: {plan.visual_bible}",
+    ]
+    if has_character_refs:
+        parts.append(
+            "The attached character reference sheets show the people in this "
+            "frame. They must look exactly like the reference: same face, "
+            "hair, glasses and wardrobe."
+        )
+    if shot.needs_real_screenshot:
+        parts.append(
+            "Any device screen in the frame is softly lit and blank; the real "
+            "product interface is inserted later."
+        )
+    parts.append(_NO_TEXT_RULE)
+    return "\n".join(parts)
+
+
+def build_edit_prompt(shot: StoryboardShot) -> str:
+    instruction = shot.edit_instruction or shot.visual_prompt
+    return (
+        f"Edit this storyboard frame: {instruction}\n"
+        "Keep everything else exactly the same: composition, people, "
+        "wardrobe, lighting and style.\n"
+        f"{_NO_TEXT_RULE}"
     )
 
 
@@ -226,7 +538,7 @@ def render_storyboard_text(
     plan: StoryboardPlan,
     frame_ids: dict[int, int | None],
 ) -> str:
-    """Plain-text board for the execution panel and for pasting into Jira."""
+    """Plain-text board in the house format, for the panel and for Jira."""
     lines: list[str] = [
         f"STORYBOARD: {plan.title}",
         f"Objective: {plan.objective}",
@@ -244,19 +556,35 @@ def render_storyboard_text(
         lines.append("ASSUMPTIONS MADE (correct if wrong):")
         lines.extend(f"  - {a}" for a in plan.assumptions)
         lines.append("")
-
-    for shot in plan.shots:
-        frame = frame_ids.get(shot.shot_number)
-        frame_label = f"image #{frame}" if frame else "image FAILED"
-        lines.append(
-            f"[{shot.shot_number}] {shot.beat} | {shot.duration_seconds:g}s | "
-            f"{shot.shot_type}, {shot.camera_movement} | {frame_label}"
+    if plan.characters:
+        lines.append("CHARACTERS:")
+        lines.extend(
+            f"  - {c.name} ({c.role}): {c.look}; {c.wardrobe}"
+            for c in plan.characters
         )
-        lines.append(f"    Action: {shot.action}")
-        if shot.on_screen_text:
-            lines.append(f"    On screen: {shot.on_screen_text}")
-        if shot.voiceover:
-            lines.append(f"    VO: {shot.voiceover}")
-        if shot.sound_notes:
-            lines.append(f"    Sound: {shot.sound_notes}")
-    return "\n".join(lines)
+        lines.append("")
+
+    for scene in plan.scenes:
+        timing = f" ({scene.timing})" if scene.timing else ""
+        lines.append(f"SCENE {scene.scene_number}: {scene.title}{timing}")
+        lines.append(f"  Type: {scene.scene_type}")
+        lines.append(f"  Context: {scene.context}")
+        if scene.voiceover:
+            lines.append("  VO:")
+            lines.extend(f"    {line}" for line in scene.voiceover)
+        lines.append(f"  Visual style: {scene.visual_style}")
+        lines.append("  Shots:")
+        for shot in scene.shots:
+            frame = frame_ids.get(shot.shot_number)
+            label = f"image #{frame}" if frame else "image FAILED"
+            flag = (
+                " [USE REAL SCREENSHOT]" if shot.needs_real_screenshot else ""
+            )
+            lines.append(
+                f"    {shot.shot_number}. {shot.shot_type}, "
+                f"{shot.camera_movement}: {shot.action}{flag} ({label})"
+            )
+            if shot.on_screen_text:
+                lines.append(f"       On screen: {shot.on_screen_text}")
+        lines.append("")
+    return "\n".join(lines).rstrip()

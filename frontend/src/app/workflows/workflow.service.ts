@@ -40,6 +40,29 @@ import {
   WorkflowUpdateDto,
 } from './workflow.models';
 
+export interface StoryboardRevisionRequest {
+  workspace_id: number;
+  shot_list: any;
+  change_notes: string;
+  settings: any;
+}
+
+export interface StoryboardPendingJob {
+  kind: 'frame' | 'character_sheet';
+  media_id: number;
+  previous_media_id: number | null;
+  shot_number?: number;
+  key?: string;
+}
+
+export interface StoryboardRevisionResult {
+  storyboard_frames: number[];
+  character_sheets: number[];
+  storyboard_text: string;
+  shot_list: any;
+  pending?: StoryboardPendingJob[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -171,6 +194,15 @@ export class WorkflowService implements OnDestroy {
   getPresets(): Observable<WorkflowPreset[]> {
     return this.http.get<WorkflowPreset[]>(
       `${this.API_BASE_URL}/workflows/presets`,
+    );
+  }
+
+  reviseStoryboard(
+    request: StoryboardRevisionRequest,
+  ): Observable<StoryboardRevisionResult> {
+    return this.http.post<StoryboardRevisionResult>(
+      `${this.API_BASE_URL}/workflows/storyboard/revise`,
+      request,
     );
   }
 

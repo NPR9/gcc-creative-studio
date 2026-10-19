@@ -22,7 +22,10 @@ from httpx import AsyncClient as RestClient
 from src.common.schema.genai_model_setup import GenAIModelSetup
 from src.common.schema.media_item_model import AssetRoleEnum
 from src.config.config_service import config_service
-from src.workflows.schema.workflow_model import ReferenceMediaOrAsset
+from src.workflows.schema.workflow_model import (
+    ReferenceMediaOrAsset,
+    ReviseStoryboardDto,
+)
 from src.workflows_executor.dto.workflows_executor_dto import (
     EditImageRequest,
     GenerateAudioRequest,
@@ -32,22 +35,12 @@ from src.workflows_executor.dto.workflows_executor_dto import (
     GenerateVideoRequest,
     VirtualTryOnRequest,
 )
-from src.workflows_executor.storyboard.storyboard_prompts import (
-    StoryboardPlan,
-    StoryboardShot,
-    build_frame_prompt,
-    build_system_prompt,
-    build_user_prompt,
-    render_storyboard_text,
+from src.workflows_executor.storyboard.storyboard_service import (
+    StoryboardService,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Max parallel frame generations per storyboard. Keeps us under per-minute
-# image quotas while still finishing a 8-frame board in ~2 rounds.
-STORYBOARD_FRAME_CONCURRENCY = 4
-STORYBOARD_MIN_FRAMES = 3
 
 
 class WorkflowsExecutorService:
@@ -614,206 +607,43 @@ class WorkflowsExecutorService:
 
         return {"generated_audio": audio_id}
 
-    # =========================================
-    # Storyboard
-    # =========================================
+    # --- Public helpers used by StoryboardService ---
 
-    async def _plan_storyboard(
+    def normalize_asset_inputs(
         self,
-        request: GenerateStoryboardRequest,
-        authorization: str | None = None,
-    ) -> StoryboardPlan:
-        """Step 1: reasoning model turns the free-text brief into a shot list."""
-        brief = request.inputs.brief
-        if not isinstance(brief, str) or not brief.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Storyboard brief is empty. Describe the video you need.",
-            )
+        inputs,
+        default_role: AssetRoleEnum = AssetRoleEnum.INPUT,
+    ):
+        return self._normalize_asset_inputs(inputs, default_role)
 
-        reference_parts = []
-        if request.inputs.reference_images:
-            reference_parts = await self._resolve_media_to_parts(
-                request.inputs.reference_images,
-                authorization,
-            )
+    async def resolve_media_to_parts(
+        self, inputs, authorization: str | None = None
+    ):
+        return await self._resolve_media_to_parts(inputs, authorization)
 
-        contents = [
-            types.Part.from_text(
-                text=build_user_prompt(
-                    brief,
-                    request.config.aspect_ratio,
-                    has_references=bool(reference_parts),
-                ),
-            ),
-            *reference_parts,
-        ]
+    async def poll_job_status(
+        self, media_id: int, authorization: str | None = None
+    ):
+        return await self._poll_job_status(media_id, authorization)
 
-        config = types.GenerateContentConfig(
-            system_instruction=build_system_prompt(
-                language=request.config.language,
-                min_frames=STORYBOARD_MIN_FRAMES,
-                max_frames=request.config.max_frames,
-                brand_context=request.config.brand_context,
-            ),
-            temperature=0.7,
-            response_mime_type="application/json",
-            response_schema=StoryboardPlan,
-        )
-
-        response = await self.genai_client.aio.models.generate_content(
-            model=request.config.reasoning_model,
-            contents=contents,
-            config=config,
-        )
-
-        plan = getattr(response, "parsed", None)
-        if not isinstance(plan, StoryboardPlan):
-            try:
-                plan = StoryboardPlan.model_validate_json(response.text or "")
-            except Exception as e:
-                logger.error("Storyboard plan parse failed: %s", e)
-                raise HTTPException(
-                    status_code=502,
-                    detail="Reasoning model returned an invalid storyboard plan.",
-                ) from e
-
-        if not plan.shots:
-            raise HTTPException(
-                status_code=502,
-                detail="Reasoning model returned a storyboard with no shots.",
-            )
-
-        # Enforce the frame ceiling even if the model ignores it, and
-        # renumber so frame order is always 1..N.
-        plan.shots = sorted(plan.shots, key=lambda s: s.shot_number)[
-            : request.config.max_frames
-        ]
-        for index, shot in enumerate(plan.shots, start=1):
-            shot.shot_number = index
-        return plan
-
-    async def _generate_storyboard_frame(
-        self,
-        shot: StoryboardShot,
-        plan: StoryboardPlan,
-        request: GenerateStoryboardRequest,
-        reference_media_items: list[dict],
-        reference_asset_ids: list[int],
-        semaphore: asyncio.Semaphore,
-        authorization: str | None = None,
-    ) -> int:
-        """Step 2 (per frame): render one storyboard frame via the image API."""
-        url = self.backend_url + "/api/images/generate-images"
-        body = {
-            "prompt": build_frame_prompt(
-                shot, plan, request.config.frame_style
-            ),
-            "workspace_id": request.workspace_id,
-            "generation_model": request.config.image_model,
-            "aspect_ratio": request.config.aspect_ratio,
-            "use_brand_guidelines": request.config.brand_guidelines,
-            "number_of_media": 1,
-            "resolution": "1K",
-        }
-        if reference_media_items:
-            body["source_media_items"] = reference_media_items
-        if reference_asset_ids:
-            body["source_asset_ids"] = reference_asset_ids
-
-        headers = {"Authorization": authorization} if authorization else {}
-
-        async with semaphore:
-            response = await self.rest_client.post(
-                url, json=body, headers=headers
-            )
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Frame {shot.shot_number}: {response.text}",
-                )
-            image_id = response.json().get("id")
-            if not image_id:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Frame {shot.shot_number}: no image id returned",
-                )
-            await self._poll_job_status(image_id, authorization)
-            return image_id
+    # =========================================
+    # Storyboard (orchestration lives in storyboard/storyboard_service.py)
+    # =========================================
 
     async def generate_storyboard(
         self,
         request: GenerateStoryboardRequest,
         authorization: str | None = None,
     ):
-        """Brief -> shot list (reasoning model) -> one image per shot.
-
-        Partial success is allowed: a board with 7 of 8 frames is still
-        useful as a brief, so individual frame failures are reported in the
-        outputs instead of failing the whole run.
-        """
+        """Brief -> plan -> character sheets -> one image per shot."""
         logger.info("Generate storyboard execution")
+        return await StoryboardService(self).generate(request, authorization)
 
-        plan = await self._plan_storyboard(request, authorization)
-
-        reference_media_items, reference_asset_ids = (
-            self._normalize_asset_inputs(
-                request.inputs.reference_images,
-                default_role=AssetRoleEnum.IMAGE_REFERENCE_ASSET,
-            )
-            if request.inputs.reference_images
-            else ([], [])
-        )
-
-        semaphore = asyncio.Semaphore(STORYBOARD_FRAME_CONCURRENCY)
-        results = await asyncio.gather(
-            *[
-                self._generate_storyboard_frame(
-                    shot,
-                    plan,
-                    request,
-                    reference_media_items,
-                    reference_asset_ids,
-                    semaphore,
-                    authorization,
-                )
-                for shot in plan.shots
-            ],
-            return_exceptions=True,
-        )
-
-        frame_ids: dict[int, int | None] = {}
-        frame_errors: list[str] = []
-        for shot, result in zip(plan.shots, results):
-            if isinstance(result, BaseException):
-                detail = getattr(result, "detail", None) or str(result)
-                logger.error(
-                    "Storyboard frame %s failed: %s", shot.shot_number, detail
-                )
-                frame_ids[shot.shot_number] = None
-                frame_errors.append(f"Frame {shot.shot_number}: {detail}")
-            else:
-                frame_ids[shot.shot_number] = result
-
-        successful_frames = [
-            frame_ids[s.shot_number]
-            for s in plan.shots
-            if frame_ids[s.shot_number] is not None
-        ]
-        if not successful_frames:
-            raise HTTPException(
-                status_code=502,
-                detail="All storyboard frames failed: "
-                + "; ".join(frame_errors),
-            )
-
-        shot_list = plan.model_dump()
-        for shot_dict in shot_list["shots"]:
-            shot_dict["frame_media_id"] = frame_ids[shot_dict["shot_number"]]
-        shot_list["frame_errors"] = frame_errors
-
-        return {
-            "storyboard_frames": successful_frames,
-            "storyboard_text": render_storyboard_text(plan, frame_ids),
-            "shot_list": shot_list,
-        }
+    async def revise_storyboard(
+        self,
+        dto: ReviseStoryboardDto,
+        authorization: str | None = None,
+    ):
+        """Applies change notes to a finished storyboard."""
+        logger.info("Revise storyboard execution")
+        return await StoryboardService(self).revise(dto, authorization)

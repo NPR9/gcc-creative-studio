@@ -275,9 +275,12 @@ class GenerateStoryboardSettings(BaseModel):
     image_model: str = "gemini-3.1-flash-image-preview"
     aspect_ratio: str = "16:9"
     frame_style: Literal["sketch", "rough_color", "photo_previz"] = (
-        "rough_color"
+        "photo_previz"
     )
-    max_frames: int = Field(default=8, ge=3, le=12)
+    board_type: Literal["shot_by_shot", "moodboard"] = "shot_by_shot"
+    max_frames: int = Field(default=24, ge=3, le=48)
+    options_per_beat: int = Field(default=3, ge=2, le=6)
+    character_sheets: bool = True
     language: str = "English"
     brand_guidelines: bool = True
     brand_context: str | None = None
@@ -288,6 +291,17 @@ class GenerateStoryboardStep(
 ):
     type: Literal[NodeTypes.GENERATE_STORYBOARD]
     inputs: GenerateStoryboardInputs
+    settings: GenerateStoryboardSettings = Field(
+        default_factory=GenerateStoryboardSettings
+    )
+
+
+class ReviseStoryboardDto(BaseModel):
+    """Request to revise a finished storyboard from its shot list output."""
+
+    workspace_id: int = Field(ge=1)
+    shot_list: dict[str, Any]
+    change_notes: str = Field(min_length=1, max_length=10000)
     settings: GenerateStoryboardSettings = Field(
         default_factory=GenerateStoryboardSettings
     )

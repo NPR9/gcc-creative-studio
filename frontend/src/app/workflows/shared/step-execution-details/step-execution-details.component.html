@@ -181,3 +181,8 @@
     </ng-container>
    </div>
 </div>
+
+<app-storyboard-revise-panel
+  *ngIf="stepType === NodeTypes.GENERATE_STORYBOARD && outputs?.shot_list?.scenes"
+  [shotList]="outputs.shot_list"
+></app-storyboard-revise-panel>

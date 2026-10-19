@@ -74,7 +74,7 @@ export class AddStepModalComponent {
       type: 'generate_storyboard',
       label: 'Generate Storyboard',
       description:
-        'Turns a plain-language video brief into a shot list with one frame per shot.',
+        'Turns a script or video idea into a storyboard: character sheets, scenes and frames.',
       icon: 'view_comfy',
     },
   ];

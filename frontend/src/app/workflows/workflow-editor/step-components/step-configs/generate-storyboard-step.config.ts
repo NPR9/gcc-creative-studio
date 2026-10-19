@@ -36,7 +36,7 @@ export const GENERATE_STORYBOARD_STEP_CONFIG: StepConfig = {
   inputs: [
     {
       name: 'brief',
-      label: 'Video brief',
+      label: 'Script or video idea',
       type: 'textarea',
       required: true,
     },
@@ -79,19 +79,44 @@ export const GENERATE_STORYBOARD_STEP_CONFIG: StepConfig = {
       label: 'Frame style',
       type: 'select',
       options: [
-        {value: 'sketch', label: 'Pencil sketch'},
+        {value: 'photo_previz', label: 'Photoreal'},
         {value: 'rough_color', label: 'Rough colour'},
-        {value: 'photo_previz', label: 'Photo previz'},
+        {value: 'sketch', label: 'Pencil sketch'},
       ],
-      defaultValue: 'rough_color',
+      defaultValue: 'photo_previz',
+    },
+    {
+      name: 'board_type',
+      label: 'Board type',
+      type: 'select',
+      options: [
+        {value: 'shot_by_shot', label: 'Shot by shot (story)'},
+        {value: 'moodboard', label: 'Mood board (options per line)'},
+      ],
+      defaultValue: 'shot_by_shot',
+    },
+    {
+      name: 'options_per_beat',
+      label: 'Options per line (mood board)',
+      type: 'slider',
+      defaultValue: 3,
+      min: 2,
+      max: 6,
+      step: 1,
+    },
+    {
+      name: 'character_sheets',
+      label: 'Make character sheets first',
+      type: 'checkbox',
+      defaultValue: true,
     },
     {
       name: 'max_frames',
       label: 'Max frames',
       type: 'slider',
-      defaultValue: 8,
+      defaultValue: 24,
       min: 3,
-      max: 12,
+      max: 48,
       step: 1,
     },
     {
@@ -125,6 +150,11 @@ export const GENERATE_STORYBOARD_STEP_CONFIG: StepConfig = {
     {
       name: 'storyboard_frames',
       label: 'storyboard_frames',
+      type: 'image',
+    },
+    {
+      name: 'character_sheets',
+      label: 'character_sheets',
       type: 'image',
     },
     {

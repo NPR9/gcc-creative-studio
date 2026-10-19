@@ -1,0 +1,97 @@
+<!--
+ Copyright 2026 Google LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<div class="mt-4 bg-neutral-700 p-3 rounded-lg">
+  <div class="flex items-center justify-between gap-2">
+    <div>
+      <p class="text-sm font-medium text-neutral-200">Revise this storyboard</p>
+      <p class="text-xs text-neutral-400">
+        Write a note under the frames you want changed. Frames without a note keep their image.
+      </p>
+    </div>
+    <button mat-stroked-button type="button" (click)="isOpen = !isOpen">
+      <mat-icon>{{ isOpen ? 'expand_less' : 'edit' }}</mat-icon>
+      {{ isOpen ? 'Close' : 'Revise' }}
+    </button>
+  </div>
+
+  <div *ngIf="isOpen" class="mt-3">
+    <p *ngIf="revisionCount > 0 && pendingCount > 0" class="text-xs text-amber-300 mb-2">
+      Revision {{ revisionCount }}: updating {{ pendingCount }} image(s). The rest of the board is unchanged.
+    </p>
+    <p *ngIf="revisionCount > 0 && pendingCount === 0" class="text-xs text-green-300 mb-2">
+      Revision {{ revisionCount }} applied. Revise again or copy the board.
+    </p>
+
+    <div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
+      <div *ngFor="let frame of frames" class="bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden">
+        <div class="aspect-video bg-neutral-800 flex items-center justify-center">
+          <div *ngIf="frame.pending" class="flex flex-col items-center gap-1">
+            <mat-spinner diameter="22"></mat-spinner>
+            <span class="text-[11px] text-neutral-400">Updating frame...</span>
+          </div>
+          <ng-container *ngIf="!frame.pending">
+            <img *ngIf="frameUrl(frame)" [src]="frameUrl(frame)" class="w-full h-full object-cover" alt="Storyboard frame">
+            <span *ngIf="!frameUrl(frame)" class="text-xs text-neutral-500">
+              {{ frame.mediaId ? 'Loading...' : 'No image' }}
+            </span>
+          </ng-container>
+        </div>
+        <div class="p-2">
+          <p class="text-[11px] text-neutral-400 truncate">{{ frame.shotNumber }}. {{ frame.sceneTitle }}</p>
+          <p class="text-xs text-neutral-200 mb-1 line-clamp-2">{{ frame.action }}</p>
+          <textarea
+            [(ngModel)]="frame.note"
+            rows="2"
+            class="w-full text-xs bg-neutral-800 text-neutral-100 rounded p-1 border border-neutral-700"
+            placeholder="Change for this frame (optional)"
+          ></textarea>
+        </div>
+      </div>
+    </div>
+
+    <label class="block text-xs text-neutral-300 mt-3 mb-1">General changes (optional)</label>
+    <textarea
+      [(ngModel)]="generalNote"
+      rows="3"
+      class="w-full text-sm bg-neutral-800 text-neutral-100 rounded p-2 border border-neutral-700"
+      placeholder="e.g. Make Astrid younger. Cut the driving scene. Add a closing shot of the team."
+    ></textarea>
+
+    <div *ngIf="errorMessage" class="text-xs text-red-300 mt-2">{{ errorMessage }}</div>
+    <ul *ngIf="frameErrors.length" class="text-xs text-amber-300 mt-2 list-disc pl-4">
+      <li *ngFor="let e of frameErrors">{{ e }}</li>
+    </ul>
+
+    <div class="flex items-center gap-2 mt-3">
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        [disabled]="!hasNotes || isRevising || pendingCount > 0"
+        (click)="revise()"
+      >
+        <mat-icon *ngIf="!isRevising">auto_fix_high</mat-icon>
+        {{ isRevising ? 'Planning changes...' : 'Apply changes' }}
+      </button>
+      <mat-spinner *ngIf="isRevising" diameter="20"></mat-spinner>
+      <button *ngIf="boardText" mat-stroked-button type="button" (click)="copyBoard()">
+        <mat-icon>content_copy</mat-icon>
+        {{ copied ? 'Copied' : 'Copy board text' }}
+      </button>
+    </div>
+  </div>
+</div>
