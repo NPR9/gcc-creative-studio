@@ -24,6 +24,8 @@ export enum NodeTypes {
   VIRTUAL_TRY_ON = 'virtual_try_on',
   GENERATE_AUDIO = 'generate_audio',
   GENERATE_STORYBOARD = 'generate_storyboard',
+  PRODUCT_IN_SCENE = 'product_in_scene',
+  ASSET_MULTIPLICATION = 'asset_multiplication',
 }
 
 export interface StepOutputReference {

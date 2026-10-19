@@ -1,0 +1,60 @@
+{
+  "id": "product_in_scene",
+  "name": "Product in Scene",
+  "description": "Place an Own Brand packshot into a generated scene. Gemini checks the packaging text is unchanged; failed checks are retried and then flagged for human review.",
+  "category": "Own Brand",
+  "steps": [
+    {
+      "stepId": "user_input",
+      "type": "user_input",
+      "status": "idle",
+      "inputs": {},
+      "settings": {},
+      "outputs": {
+        "Product_packshot": {
+          "type": "image"
+        },
+        "Scene_description": {
+          "type": "text"
+        }
+      }
+    },
+    {
+      "stepId": "product_in_scene",
+      "type": "product_in_scene",
+      "status": "idle",
+      "inputs": {
+        "product_image": {
+          "step": "user_input",
+          "output": "Product_packshot"
+        },
+        "scene_prompt": {
+          "step": "user_input",
+          "output": "Scene_description"
+        }
+      },
+      "settings": {
+        "model": "gemini-3-pro-image-preview",
+        "aspect_ratio": "1:1",
+        "resolution": "1K",
+        "brand_guidelines": false,
+        "max_attempts": 2,
+        "fidelity_model": "gemini-2.5-flash"
+      },
+      "outputs": {
+        "generated_image": {
+          "type": "image"
+        },
+        "fidelity_passed": {
+          "type": "text"
+        },
+        "needs_review": {
+          "type": "text"
+        },
+        "fidelity_report": {
+          "type": "text"
+        }
+      }
+    }
+  ]
+}

@@ -246,7 +246,9 @@ export class WorkflowEditorComponent implements OnInit, OnDestroy {
       type === NodeTypes.GENERATE_IMAGE ||
       type === NodeTypes.EDIT_IMAGE ||
       type === NodeTypes.CROP_IMAGE ||
-      type === NodeTypes.VIRTUAL_TRY_ON
+      type === NodeTypes.VIRTUAL_TRY_ON ||
+      type === NodeTypes.PRODUCT_IN_SCENE ||
+      type === NodeTypes.ASSET_MULTIPLICATION
     );
   }
 

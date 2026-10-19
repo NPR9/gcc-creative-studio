@@ -45,6 +45,8 @@ class NodeTypes(str, Enum):
     VIRTUAL_TRY_ON = "virtual_try_on"
     GENERATE_AUDIO = "generate_audio"
     GENERATE_STORYBOARD = "generate_storyboard"
+    PRODUCT_IN_SCENE = "product_in_scene"
+    ASSET_MULTIPLICATION = "asset_multiplication"
 
 
 # =========================================
@@ -327,6 +329,67 @@ class RenderStoryboardDto(BaseModel):
     )
 
 
+# --- Product in Scene ---
+class ProductInSceneInputs(BaseModel):
+    product_image: WorkflowInputItem
+    scene_prompt: StepOutputReference | str
+
+
+class ProductInSceneSettings(BaseModel):
+    model: str = "gemini-3-pro-image-preview"
+    aspect_ratio: str = "1:1"
+    resolution: Literal["1K", "2K", "4K"] = "1K"
+    brand_guidelines: bool = False
+    # How many generations to try before handing the result to a human.
+    max_attempts: int = Field(default=2, ge=1, le=3)
+    # Gemini text model that compares packaging text before and after.
+    fidelity_model: str = "gemini-2.5-flash"
+
+
+class ProductInSceneStep(
+    BaseStep[ProductInSceneInputs, ProductInSceneSettings]
+):
+    type: Literal[NodeTypes.PRODUCT_IN_SCENE]
+    inputs: ProductInSceneInputs
+    settings: ProductInSceneSettings
+
+
+# --- Asset Multiplication ---
+class AssetMultiplicationInputs(BaseModel):
+    master_image: WorkflowInputItem
+    headline: StepOutputReference | str | None = None
+    cta_text: StepOutputReference | str | None = None
+    logo_image: WorkflowInputItem | None = None
+
+
+class AssetMultiplicationSettings(BaseModel):
+    # Channel preset from the size library (e.g. "meta", "demandgen", "pmax").
+    channel_preset: str = "meta"
+    # Optional comma-separated size ids that override the preset selection.
+    sizes: str | None = None
+    # "preview" renders with the cheap preview model, "final" with final_model.
+    quality: Literal["preview", "final"] = "preview"
+    final_model: str = "gemini-3.1-flash-image-preview"
+    # "auto" follows the channel rule in the size library.
+    cta: Literal["auto", "on", "off"] = "auto"
+    brand_guidelines: bool = False
+
+    @field_validator("sizes", mode="before")
+    @classmethod
+    def blank_sizes_to_none(cls, v: Any) -> str | None:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+
+class AssetMultiplicationStep(
+    BaseStep[AssetMultiplicationInputs, AssetMultiplicationSettings]
+):
+    type: Literal[NodeTypes.ASSET_MULTIPLICATION]
+    inputs: AssetMultiplicationInputs
+    settings: AssetMultiplicationSettings
+
+
 # =========================================
 # Workflow Step Union
 # =========================================
@@ -340,6 +403,8 @@ WorkflowStepUnion = Union[
     VirtualTryOnStep,
     GenerateAudioStep,
     GenerateStoryboardStep,
+    ProductInSceneStep,
+    AssetMultiplicationStep,
 ]
 
 # Discriminated union based on the 'type' field in each step

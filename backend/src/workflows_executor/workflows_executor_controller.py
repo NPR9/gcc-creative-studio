@@ -16,13 +16,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header
 
+from src.workflows_executor.creative.creative_steps_service import (
+    CreativeStepsService,
+)
 from src.workflows_executor.dto.workflows_executor_dto import (
+    AssetMultiplicationRequest,
     EditImageRequest,
     GenerateAudioRequest,
     GenerateImageRequest,
     GenerateStoryboardRequest,
     GenerateTextRequest,
     GenerateVideoRequest,
+    ProductInSceneRequest,
     VirtualTryOnRequest,
 )
 from src.workflows_executor.workflows_executor_service import (
@@ -97,3 +102,21 @@ async def generate_storyboard(
     service: WorkflowsExecutorService = Depends(),
 ):
     return await service.generate_storyboard(request, authorization)
+
+
+@router.post("/product_in_scene")
+async def product_in_scene(
+    request: ProductInSceneRequest,
+    authorization: Annotated[str | None, Header()] = None,
+    service: CreativeStepsService = Depends(),
+):
+    return await service.product_in_scene(request, authorization)
+
+
+@router.post("/asset_multiplication")
+async def asset_multiplication(
+    request: AssetMultiplicationRequest,
+    authorization: Annotated[str | None, Header()] = None,
+    service: CreativeStepsService = Depends(),
+):
+    return await service.asset_multiplication(request, authorization)

@@ -1,0 +1,61 @@
+{
+  "id": "asset_multiplication",
+  "name": "Asset Multiplication",
+  "description": "Turn one master visual into every size of a channel preset (Meta, DemandGen, PMax). Run as Preview first (Nano Banana 2 Lite), then switch Quality to Final. Headline and CTA are set as real text.",
+  "category": "Adaptation",
+  "steps": [
+    {
+      "stepId": "user_input",
+      "type": "user_input",
+      "status": "idle",
+      "inputs": {},
+      "settings": {},
+      "outputs": {
+        "Master_visual": {
+          "type": "image"
+        },
+        "Headline": {
+          "type": "text"
+        },
+        "CTA_text": {
+          "type": "text"
+        }
+      }
+    },
+    {
+      "stepId": "asset_multiplication",
+      "type": "asset_multiplication",
+      "status": "idle",
+      "inputs": {
+        "master_image": {
+          "step": "user_input",
+          "output": "Master_visual"
+        },
+        "headline": {
+          "step": "user_input",
+          "output": "Headline"
+        },
+        "cta_text": {
+          "step": "user_input",
+          "output": "CTA_text"
+        }
+      },
+      "settings": {
+        "channel_preset": "meta",
+        "sizes": "",
+        "quality": "preview",
+        "final_model": "gemini-3.1-flash-image-preview",
+        "cta": "auto",
+        "brand_guidelines": false
+      },
+      "outputs": {
+        "images": {
+          "type": "image"
+        },
+        "manifest": {
+          "type": "text"
+        }
+      }
+    }
+  ]
+}

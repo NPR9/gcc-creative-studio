@@ -59,7 +59,11 @@ LOCATION = config_service.WORKFLOWS_LOCATION
 BACKEND_EXECUTOR_URL = config_service.WORKFLOWS_EXECUTOR_URL
 
 # Step types whose executor call can exceed the default HTTP timeout.
-LONG_RUNNING_STEP_TYPES = {NodeTypes.GENERATE_STORYBOARD.value}
+LONG_RUNNING_STEP_TYPES = {
+    NodeTypes.GENERATE_STORYBOARD.value,
+    NodeTypes.PRODUCT_IN_SCENE.value,
+    NodeTypes.ASSET_MULTIPLICATION.value,
+}
 
 
 class WorkflowService:

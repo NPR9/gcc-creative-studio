@@ -77,6 +77,20 @@ export class AddStepModalComponent {
         'Turns a script or video idea into a storyboard: character sheets, scenes and frames.',
       icon: 'view_comfy',
     },
+    {
+      type: 'product_in_scene',
+      label: 'Product in Scene',
+      description:
+        'Places a product packshot into a generated scene and checks the label is unchanged.',
+      icon: 'storefront',
+    },
+    {
+      type: 'asset_multiplication',
+      label: 'Asset Multiplication',
+      description:
+        'Turns one master visual into every channel size, with headline and CTA set as text.',
+      icon: 'dashboard_customize',
+    },
   ];
 
   constructor(public dialogRef: MatDialogRef<AddStepModalComponent>) {}

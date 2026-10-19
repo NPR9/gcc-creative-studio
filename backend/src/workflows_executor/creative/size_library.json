@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "notes": "Seeded from the paid-social spec (Meta, DemandGen, PMax). Add sizes here without code changes. safe_zone values are fractions of the canvas kept free of cropping-critical detail and used to place text.",
+  "sizes": [
+    {
+      "id": "square_1200",
+      "name": "Square 1200x1200",
+      "width": 1200,
+      "height": 1200,
+      "channels": ["meta", "demandgen", "pmax"],
+      "safe_zone": {"top": 0.06, "right": 0.06, "bottom": 0.06, "left": 0.06}
+    },
+    {
+      "id": "landscape_1200x628",
+      "name": "Landscape 1200x628",
+      "width": 1200,
+      "height": 628,
+      "channels": ["meta", "demandgen", "pmax"],
+      "safe_zone": {"top": 0.08, "right": 0.05, "bottom": 0.08, "left": 0.05}
+    },
+    {
+      "id": "vertical_1080x1920",
+      "name": "Vertical 1080x1920",
+      "width": 1080,
+      "height": 1920,
+      "channels": ["meta", "demandgen", "pmax"],
+      "safe_zone": {"top": 0.14, "right": 0.06, "bottom": 0.2, "left": 0.06}
+    },
+    {
+      "id": "portrait_960x1200",
+      "name": "Portrait 960x1200",
+      "width": 960,
+      "height": 1200,
+      "channels": ["demandgen", "pmax"],
+      "safe_zone": {"top": 0.06, "right": 0.06, "bottom": 0.08, "left": 0.06}
+    }
+  ],
+  "channel_presets": {
+    "meta": {"label": "Meta", "cta": false},
+    "demandgen": {"label": "DemandGen (online purchase)", "cta": false},
+    "pmax": {"label": "Performance Max", "cta": true}
+  }
+}

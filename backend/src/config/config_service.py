@@ -101,6 +101,14 @@ class ConfigService(BaseSettings):
     )
     BACKEND_SERVICE_ACCOUNT_EMAIL: str = ""
 
+    # --- Creative workflow steps (Product-in-Scene, Asset Multiplication) ---
+    # Cheap model used for Asset Multiplication preview runs.
+    ASSET_MULTIPLICATION_PREVIEW_MODEL: str = "gemini-3.1-flash-image-preview"
+    # Optional .ttf/.otf for headline and CTA text; empty = Pillow's bundled font.
+    ASSET_MULTIPLICATION_FONT_PATH: str = ""
+    # Optional override for the size library JSON; empty = bundled library.
+    ASSET_MULTIPLICATION_SIZE_LIBRARY_PATH: str = ""
+
     @model_validator(mode="before")
     @classmethod
     def get_default_project_id(cls, values: Any) -> Any:
