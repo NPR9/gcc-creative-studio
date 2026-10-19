@@ -35,7 +35,11 @@ import {
   takeUntil,
 } from 'rxjs';
 import {ConfirmationDialogComponent} from '../../common/components/confirmation-dialog/confirmation-dialog.component';
-import {WorkflowModel, WorkflowRunStatusEnum} from '../workflow.models';
+import {
+  WorkflowModel,
+  WorkflowPreset,
+  WorkflowRunStatusEnum,
+} from '../workflow.models';
 import {WorkflowService} from '../workflow.service';
 import {AuthService} from '../../common/services/auth.service';
 
@@ -73,6 +77,8 @@ export class WorkflowListComponent implements OnInit, OnDestroy, AfterViewInit {
   public isLoading = false;
   public errorMessage: string | null = null;
   public obs$!: Observable<WorkflowModel[]>;
+  public presets: WorkflowPreset[] = [];
+  public installingPresetId: string | null = null;
 
   constructor(
     private workflowService: WorkflowService,
@@ -102,6 +108,30 @@ export class WorkflowListComponent implements OnInit, OnDestroy, AfterViewInit {
       });
 
     this.obs$ = this.dataSource.connect();
+
+    this.subscriptions.add(
+      this.workflowService.getPresets().subscribe({
+        next: presets => (this.presets = presets),
+        // Presets are optional; the list still works without them.
+        error: err => console.error('Failed to load workflow presets', err),
+      }),
+    );
+  }
+
+  usePreset(preset: WorkflowPreset): void {
+    if (this.installingPresetId) return;
+    this.installingPresetId = preset.id;
+    this.workflowService.installPreset(preset.id).subscribe({
+      next: workflow => {
+        this.installingPresetId = null;
+        void this.router.navigate(['/workflows/edit', workflow.id]);
+      },
+      error: err => {
+        console.error('Failed to install preset', err);
+        this.installingPresetId = null;
+        this.errorMessage = `Could not create "${preset.name}". Please try again.`;
+      },
+    });
   }
 
   ngAfterViewInit() {

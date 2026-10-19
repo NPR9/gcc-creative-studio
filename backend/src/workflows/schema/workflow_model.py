@@ -44,6 +44,7 @@ class NodeTypes(str, Enum):
     CROP_IMAGE = "crop_image"
     VIRTUAL_TRY_ON = "virtual_try_on"
     GENERATE_AUDIO = "generate_audio"
+    GENERATE_STORYBOARD = "generate_storyboard"
 
 
 # =========================================
@@ -263,6 +264,35 @@ class GenerateAudioStep(BaseStep[GenerateAudioInputs, GenerateAudioSettings]):
     settings: GenerateAudioSettings
 
 
+# --- Generate Storyboard ---
+class GenerateStoryboardInputs(BaseModel):
+    brief: StepOutputReference | str
+    reference_images: WorkflowInputItem | None = None
+
+
+class GenerateStoryboardSettings(BaseModel):
+    reasoning_model: str = "gemini-3-pro-preview"
+    image_model: str = "gemini-3.1-flash-image-preview"
+    aspect_ratio: str = "16:9"
+    frame_style: Literal["sketch", "rough_color", "photo_previz"] = (
+        "rough_color"
+    )
+    max_frames: int = Field(default=8, ge=3, le=12)
+    language: str = "English"
+    brand_guidelines: bool = True
+    brand_context: str | None = None
+
+
+class GenerateStoryboardStep(
+    BaseStep[GenerateStoryboardInputs, GenerateStoryboardSettings]
+):
+    type: Literal[NodeTypes.GENERATE_STORYBOARD]
+    inputs: GenerateStoryboardInputs
+    settings: GenerateStoryboardSettings = Field(
+        default_factory=GenerateStoryboardSettings
+    )
+
+
 # =========================================
 # Workflow Step Union
 # =========================================
@@ -275,6 +305,7 @@ WorkflowStepUnion = Union[
     GenerateVideoStep,
     VirtualTryOnStep,
     GenerateAudioStep,
+    GenerateStoryboardStep,
 ]
 
 # Discriminated union based on the 'type' field in each step

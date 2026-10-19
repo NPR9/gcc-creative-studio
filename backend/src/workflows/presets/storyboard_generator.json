@@ -1,0 +1,42 @@
+{
+  "id": "storyboard_generator",
+  "name": "Storyboard Generator",
+  "description": "Describe the video you need in plain words. Gemini plans the shots (story, camera, on-screen text, voiceover) and draws one frame per shot. Attach product or reference images to keep the board on-brand. Use the result as your brief to the central creative team.",
+  "category": "Briefing",
+  "steps": [
+    {
+      "stepId": "user_input",
+      "type": "user_input",
+      "status": "idle",
+      "inputs": {},
+      "settings": {},
+      "outputs": {
+        "Describe_your_video": {"type": "text"},
+        "Product_or_reference_images": {"type": "image"}
+      }
+    },
+    {
+      "stepId": "storyboard",
+      "type": "generate_storyboard",
+      "status": "idle",
+      "inputs": {
+        "brief": {"step": "user_input", "output": "Describe_your_video"},
+        "reference_images": {
+          "step": "user_input",
+          "output": "Product_or_reference_images"
+        }
+      },
+      "settings": {
+        "reasoning_model": "gemini-3-pro-preview",
+        "image_model": "gemini-3.1-flash-image-preview",
+        "aspect_ratio": "16:9",
+        "frame_style": "rough_color",
+        "max_frames": 8,
+        "language": "English",
+        "brand_guidelines": true,
+        "brand_context": null
+      },
+      "outputs": {}
+    }
+  ]
+}

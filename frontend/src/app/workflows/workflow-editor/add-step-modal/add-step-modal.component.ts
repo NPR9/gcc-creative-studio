@@ -70,6 +70,13 @@ export class AddStepModalComponent {
       description: 'Generates audio (music or speech) from a text prompt.',
       icon: 'music_note',
     },
+    {
+      type: 'generate_storyboard',
+      label: 'Generate Storyboard',
+      description:
+        'Turns a plain-language video brief into a shot list with one frame per shot.',
+      icon: 'view_comfy',
+    },
   ];
 
   constructor(public dialogRef: MatDialogRef<AddStepModalComponent>) {}

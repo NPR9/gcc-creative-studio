@@ -20,6 +20,7 @@ from src.workflows_executor.dto.workflows_executor_dto import (
     EditImageRequest,
     GenerateAudioRequest,
     GenerateImageRequest,
+    GenerateStoryboardRequest,
     GenerateTextRequest,
     GenerateVideoRequest,
     VirtualTryOnRequest,
@@ -87,3 +88,12 @@ async def generate_audio(
     service: WorkflowsExecutorService = Depends(),
 ):
     return await service.generate_audio(request, authorization)
+
+
+@router.post("/generate_storyboard")
+async def generate_storyboard(
+    request: GenerateStoryboardRequest,
+    authorization: Annotated[str | None, Header()] = None,
+    service: WorkflowsExecutorService = Depends(),
+):
+    return await service.generate_storyboard(request, authorization)

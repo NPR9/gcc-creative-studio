@@ -51,7 +51,7 @@
       <ng-template #textInput>
         <mat-form-field appearance="outline" class="w-full">
           <mat-label>{{ input.name | titlecase }}</mat-label>
-          <input matInput [formControlName]="input.name" [placeholder]="'Enter ' + input.name">
+          <textarea matInput rows="3" [formControlName]="input.name" [placeholder]="'Enter ' + input.name"></textarea>
           <mat-hint *ngIf="input.type !== 'text'">Type: {{ input.type }}</mat-hint>
         </mat-form-field>
       </ng-template>

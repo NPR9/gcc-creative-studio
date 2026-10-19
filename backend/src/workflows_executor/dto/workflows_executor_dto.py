@@ -21,6 +21,8 @@ from src.workflows.schema.workflow_model import (
     GenerateAudioSettings,
     GenerateImageInputs,
     GenerateImageSettings,
+    GenerateStoryboardInputs,
+    GenerateStoryboardSettings,
     GenerateTextInputs,
     GenerateTextSettings,
     GenerateVideoInputs,
@@ -63,3 +65,9 @@ class GenerateAudioRequest(BaseModel):
     workspace_id: int
     inputs: GenerateAudioInputs
     config: GenerateAudioSettings
+
+
+class GenerateStoryboardRequest(BaseModel):
+    workspace_id: int
+    inputs: GenerateStoryboardInputs
+    config: GenerateStoryboardSettings

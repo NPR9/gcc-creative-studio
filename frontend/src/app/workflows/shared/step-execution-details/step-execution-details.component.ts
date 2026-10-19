@@ -112,6 +112,10 @@ export class StepExecutionDetailsComponent implements OnInit {
     return key ? this.loadedMedia.has(key) : false;
   }
 
+  isString(val: any): boolean {
+    return typeof val === 'string';
+  }
+
   isArray(val: any): boolean {
     return Array.isArray(val);
   }

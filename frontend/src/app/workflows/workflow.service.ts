@@ -34,6 +34,7 @@ import {
   ExecutionResponse,
   WorkflowCreateDto,
   WorkflowModel,
+  WorkflowPreset,
   WorkflowRunModel,
   WorkflowSearchDto,
   WorkflowUpdateDto,
@@ -165,6 +166,21 @@ export class WorkflowService implements OnDestroy {
   setFilter(filter: string) {
     this.currentFilter = filter;
     this.loadWorkflows(true, false);
+  }
+
+  getPresets(): Observable<WorkflowPreset[]> {
+    return this.http.get<WorkflowPreset[]>(
+      `${this.API_BASE_URL}/workflows/presets`,
+    );
+  }
+
+  installPreset(presetId: string): Observable<WorkflowModel> {
+    return this.http
+      .post<WorkflowModel>(
+        `${this.API_BASE_URL}/workflows/presets/${presetId}/install`,
+        {},
+      )
+      .pipe(tap(() => this.loadWorkflows(true)));
   }
 
   createWorkflow(workflowData: WorkflowCreateDto): Observable<WorkflowModel> {

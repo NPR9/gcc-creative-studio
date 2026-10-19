@@ -33,6 +33,28 @@
 
   </div>
 
+  <!-- Templates (presets) -->
+  <div *ngIf="presets.length > 0" class="presets-section">
+    <h2 class="presets-title">Start from a template</h2>
+    <div class="presets-grid">
+      <div *ngFor="let preset of presets" class="preset-card">
+        <div class="preset-category">{{ preset.category }}</div>
+        <h3>{{ preset.name }}</h3>
+        <p>{{ preset.description }}</p>
+        <studio-button
+          variant="cta"
+          size="small"
+          mat-flat-button
+          [disabled]="installingPresetId !== null"
+          (click)="usePreset(preset)"
+        >
+          <mat-icon>{{ installingPresetId === preset.id ? 'hourglass_empty' : 'add' }}</mat-icon>
+          Use template
+        </studio-button>
+      </div>
+    </div>
+  </div>
+
   <!-- Error Message -->
   <div
     *ngIf="errorMessage && !isLoading"

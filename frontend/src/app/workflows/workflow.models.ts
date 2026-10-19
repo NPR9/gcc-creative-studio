@@ -23,6 +23,7 @@ export enum NodeTypes {
   CROP_IMAGE = 'crop_image',
   VIRTUAL_TRY_ON = 'virtual_try_on',
   GENERATE_AUDIO = 'generate_audio',
+  GENERATE_STORYBOARD = 'generate_storyboard',
 }
 
 export interface StepOutputReference {
@@ -139,4 +140,12 @@ export interface BatchExecutionResponse {
 
 export interface BatchExecutionRequest {
   items: {row_index: number; args: any}[];
+}
+
+// --- Workflow presets (ready-made templates) ---
+export interface WorkflowPreset {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
 }

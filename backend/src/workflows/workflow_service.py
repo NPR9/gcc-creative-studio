@@ -58,6 +58,9 @@ PROJECT_ID = config_service.PROJECT_ID
 LOCATION = config_service.WORKFLOWS_LOCATION
 BACKEND_EXECUTOR_URL = config_service.WORKFLOWS_EXECUTOR_URL
 
+# Step types whose executor call can exceed the default HTTP timeout.
+LONG_RUNNING_STEP_TYPES = {NodeTypes.GENERATE_STORYBOARD.value}
+
 
 class WorkflowService:
     """Orchestrates multi-step generative AI workflows."""
@@ -147,6 +150,10 @@ class WorkflowService:
                     "result": f"{step_name}_result",
                 },
             }
+            # Long-running steps need more than Cloud Workflows' default
+            # 300s HTTP timeout (max allowed is 1800s).
+            if step_type in LONG_RUNNING_STEP_TYPES:
+                gcp_step[step_name]["args"]["timeout"] = 1800
             gcp_steps.append(gcp_step)
 
             # Store mock outputs for subsequent steps

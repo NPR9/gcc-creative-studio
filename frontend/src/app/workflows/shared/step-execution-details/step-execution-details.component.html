@@ -175,7 +175,8 @@
        <!-- Text/Other Output -->
        <div *ngIf="!isImageOutput(output.key) && !isVideoOutput(output.key) && !isAudioOutput(output.key)" class="col-span-2 bg-neutral-900 p-2 rounded border border-neutral-800 mb-2">
             <span class="text-xs text-neutral-500 block mb-1">{{ output.key }}</span>
-            <p class="text-sm text-neutral-200 whitespace-pre-wrap font-mono">{{ output.value | json }}</p>
+            <p *ngIf="isString(output.value)" class="text-sm text-neutral-200 whitespace-pre-wrap">{{ output.value }}</p>
+            <p *ngIf="!isString(output.value)" class="text-sm text-neutral-200 whitespace-pre-wrap font-mono">{{ output.value | json }}</p>
        </div>
     </ng-container>
    </div>
