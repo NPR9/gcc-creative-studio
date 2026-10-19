@@ -24,6 +24,7 @@ from src.common.schema.media_item_model import AssetRoleEnum
 from src.config.config_service import config_service
 from src.workflows.schema.workflow_model import (
     ReferenceMediaOrAsset,
+    RenderStoryboardDto,
     ReviseStoryboardDto,
 )
 from src.workflows_executor.dto.workflows_executor_dto import (
@@ -647,3 +648,12 @@ class WorkflowsExecutorService:
         """Applies change notes to a finished storyboard."""
         logger.info("Revise storyboard execution")
         return await StoryboardService(self).revise(dto, authorization)
+
+    async def render_storyboard(
+        self,
+        dto: RenderStoryboardDto,
+        authorization: str | None = None,
+    ):
+        """Draws an approved plan (character sheets, then frames)."""
+        logger.info("Render storyboard execution: %s", dto.phase)
+        return await StoryboardService(self).render(dto, authorization)

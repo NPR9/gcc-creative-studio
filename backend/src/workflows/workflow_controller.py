@@ -26,6 +26,7 @@ from src.workflows.dto.batch_execution_dto import (
 from src.workflows.dto.workflow_search_dto import WorkflowSearchDto
 from src.workflows.presets.workflow_presets import WorkflowPreset, load_presets
 from src.workflows.schema.workflow_model import (
+    RenderStoryboardDto,
     ReviseStoryboardDto,
     WorkflowCreateDto,
     WorkflowExecuteDto,
@@ -80,7 +81,7 @@ async def install_workflow_preset(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        )
+        ) from e
 
 
 # --- Storyboard revision ---
@@ -98,6 +99,20 @@ async def revise_storyboard(
     images. Returns the same outputs as the storyboard step.
     """
     return await executor.revise_storyboard(dto, authorization)
+
+
+@router.post("/storyboard/render")
+async def render_storyboard(
+    dto: RenderStoryboardDto,
+    authorization: Annotated[str | None, Header()] = None,
+    executor: WorkflowsExecutorService = Depends(),
+):
+    """Draws an approved plan.
+
+    Call with phase "sheets", wait for the pending sheets, then call with
+    phase "frames". Each call starts image jobs and returns at once.
+    """
+    return await executor.render_storyboard(dto, authorization)
 
 
 @router.post("/search", response_model=PaginationResponseDto[WorkflowModel])

@@ -105,6 +105,12 @@ export const GENERATE_STORYBOARD_STEP_CONFIG: StepConfig = {
       step: 1,
     },
     {
+      name: 'plan_first',
+      label: 'Approve the plan before drawing frames',
+      type: 'checkbox',
+      defaultValue: true,
+    },
+    {
       name: 'character_sheets',
       label: 'Make character sheets first',
       type: 'checkbox',

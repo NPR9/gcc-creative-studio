@@ -15,6 +15,7 @@
  */
 
 import {Component, Input, OnChanges, OnDestroy} from '@angular/core';
+import {firstValueFrom} from 'rxjs';
 import {GalleryService} from '../../../gallery/gallery.service';
 import {WorkspaceStateService} from '../../../services/workspace/workspace-state.service';
 import {
@@ -37,9 +38,15 @@ const POLL_INTERVAL_MS = 4000;
 const MAX_POLLS = 60;
 
 /**
- * Lets the requester change individual frames of a finished storyboard.
- * Only frames with a note (or touched by the general note) are edited or
- * redrawn; the rest keep their images.
+ * Storyboard panel on a finished run.
+ *
+ * - Plan awaiting approval: the requester reviews the text plan, can ask
+ *   for plan changes, then approves; character sheets are drawn first,
+ *   then every frame.
+ * - Drawn board: notes on individual frames revise only those frames.
+ *
+ * Every backend call returns in seconds (Firebase Hosting cuts requests at
+ * 60s); images render in the background and are polled here.
  */
 @Component({
   selector: 'app-storyboard-revise-panel',
@@ -47,13 +54,15 @@ const MAX_POLLS = 60;
 })
 export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
   @Input() shotList: any = null;
+  @Input() storyboardText = '';
 
   board: any = null;
   boardText = '';
   frames: FrameRow[] = [];
   generalNote = '';
   isOpen = false;
-  isRevising = false;
+  isBusy = false;
+  busyLabel = '';
   revisionCount = 0;
   errorMessage: string | null = null;
   frameErrors: string[] = [];
@@ -61,6 +70,7 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
   urls = new Map<number, string>();
   pendingCount = 0;
   private timers: ReturnType<typeof setTimeout>[] = [];
+  private destroyed = false;
 
   constructor(
     private workflowService: WorkflowService,
@@ -70,12 +80,18 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(): void {
     if (this.shotList && !this.board) {
-      this.setBoard(this.shotList, '');
+      this.setBoard(this.shotList, this.storyboardText);
+      this.isOpen = this.awaitingApproval;
     }
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.timers.forEach(t => clearTimeout(t));
+  }
+
+  get awaitingApproval(): boolean {
+    return !!this.board?.awaiting_approval;
   }
 
   get hasNotes(): boolean {
@@ -85,19 +101,21 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
     );
   }
 
+  get canAct(): boolean {
+    return !this.isBusy && this.pendingCount === 0;
+  }
+
   frameUrl(frame: FrameRow): string {
     return frame.mediaId ? this.urls.get(frame.mediaId) || '' : '';
   }
 
+  /** Plan changes before approval, or frame changes after drawing. */
   revise(): void {
-    if (!this.hasNotes || this.isRevising || this.pendingCount > 0) return;
-    const workspaceId = this.workspaceStateService.getActiveWorkspaceId();
-    if (!workspaceId) {
-      this.errorMessage = 'Select a workspace first.';
-      return;
-    }
-    this.isRevising = true;
-    this.errorMessage = null;
+    const workspaceId = this.workspaceId();
+    if (!this.hasNotes || !this.canAct || !workspaceId) return;
+    this.startBusy(
+      this.awaitingApproval ? 'Updating plan...' : 'Planning changes...',
+    );
 
     this.workflowService
       .reviseStoryboard({
@@ -105,21 +123,59 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
         shot_list: this.board,
         change_notes: this.composeNotes(),
         settings: this.board?.settings ?? {},
+        plan_only: this.awaitingApproval,
       })
       .subscribe({
         next: (result: StoryboardRevisionResult) => {
-          this.isRevising = false;
+          this.isBusy = false;
           this.revisionCount++;
           this.generalNote = '';
           this.setBoard(result.shot_list, result.storyboard_text);
-          this.trackPending(result.pending ?? []);
+          void this.trackPending(result.pending ?? []);
         },
-        error: err => {
-          this.isRevising = false;
-          this.errorMessage =
-            err?.error?.detail || 'Revision failed. Please try again.';
-        },
+        error: err => this.fail(err, 'Revision failed. Please try again.'),
       });
+  }
+
+  /** Approve the plan: draw character sheets, then every frame. */
+  async approve(): Promise<void> {
+    const workspaceId = this.workspaceId();
+    if (!this.awaitingApproval || !this.canAct || !workspaceId) return;
+    const settings = this.board?.settings ?? {};
+
+    try {
+      const wantsSheets =
+        settings.character_sheets !== false &&
+        (this.board?.characters?.length ?? 0) > 0;
+      if (wantsSheets) {
+        this.startBusy('Drawing character sheets...');
+        const sheets = await firstValueFrom(
+          this.workflowService.renderStoryboard({
+            workspace_id: workspaceId,
+            shot_list: this.board,
+            phase: 'sheets',
+            settings,
+          }),
+        );
+        this.setBoard(sheets.shot_list, sheets.storyboard_text);
+        await this.trackPending(sheets.pending ?? []);
+      }
+
+      this.startBusy('Drawing frames...');
+      const drawn = await firstValueFrom(
+        this.workflowService.renderStoryboard({
+          workspace_id: workspaceId,
+          shot_list: this.board,
+          phase: 'frames',
+          settings,
+        }),
+      );
+      this.isBusy = false;
+      this.setBoard(drawn.shot_list, drawn.storyboard_text);
+      void this.trackPending(drawn.pending ?? []);
+    } catch (err) {
+      this.fail(err, 'Drawing failed. Please try again.');
+    }
   }
 
   copyBoard(): void {
@@ -128,6 +184,23 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
       this.copied = true;
       setTimeout(() => (this.copied = false), 2000);
     });
+  }
+
+  private workspaceId(): number | null {
+    const id = this.workspaceStateService.getActiveWorkspaceId();
+    if (!id) this.errorMessage = 'Select a workspace first.';
+    return id;
+  }
+
+  private startBusy(label: string): void {
+    this.isBusy = true;
+    this.busyLabel = label;
+    this.errorMessage = null;
+  }
+
+  private fail(err: any, fallback: string): void {
+    this.isBusy = false;
+    this.errorMessage = err?.error?.detail || fallback;
   }
 
   private composeNotes(): string {
@@ -141,7 +214,7 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
 
   private setBoard(board: any, text: string): void {
     this.board = board;
-    this.boardText = text;
+    this.boardText = text || this.boardText;
     this.frameErrors = board?.frame_errors ?? [];
     this.frames = (board?.scenes ?? []).flatMap((scene: any) =>
       (scene.shots ?? []).map((shot: any) => ({
@@ -157,26 +230,31 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
   }
 
   /**
-   * Changed frames render in the background. Poll each one; when it fails,
-   * put the previous image back so the board never has a hole.
+   * Images render in the background. Poll each one; when one fails, put
+   * the previous image back so the board never has a hole. Resolves when
+   * every job has finished.
    */
-  private trackPending(jobs: StoryboardPendingJob[]): void {
-    jobs.forEach(job => {
-      const frame =
-        job.kind === 'frame'
-          ? this.frames.find(f => f.shotNumber === job.shot_number)
-          : undefined;
-      if (frame) frame.pending = true;
-      this.pendingCount++;
-      this.poll(job, frame, 0);
-    });
+  private trackPending(jobs: StoryboardPendingJob[]): Promise<void> {
+    return Promise.all(
+      jobs.map(job => {
+        const frame =
+          job.kind === 'frame'
+            ? this.frames.find(f => f.shotNumber === job.shot_number)
+            : undefined;
+        if (frame) frame.pending = true;
+        this.pendingCount++;
+        return new Promise<void>(resolve => this.poll(job, frame, 0, resolve));
+      }),
+    ).then(() => undefined);
   }
 
   private poll(
     job: StoryboardPendingJob,
     frame: FrameRow | undefined,
     attempt: number,
+    done: () => void,
   ): void {
+    if (this.destroyed) return done();
     const timer = setTimeout(() => {
       this.galleryService.getMedia(job.media_id).subscribe({
         next: item => {
@@ -184,23 +262,27 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
           if (status === 'completed') {
             const url = item?.presignedUrls?.[0];
             if (url) this.urls.set(job.media_id, url);
-            this.finish(frame);
+            this.finish(frame, done);
           } else if (status === 'failed' || attempt >= MAX_POLLS) {
-            this.revert(job, frame);
+            this.revert(job, frame, done);
           } else {
-            this.poll(job, frame, attempt + 1);
+            this.poll(job, frame, attempt + 1, done);
           }
         },
         error: () =>
           attempt >= MAX_POLLS
-            ? this.revert(job, frame)
-            : this.poll(job, frame, attempt + 1),
+            ? this.revert(job, frame, done)
+            : this.poll(job, frame, attempt + 1, done),
       });
     }, POLL_INTERVAL_MS);
     this.timers.push(timer);
   }
 
-  private revert(job: StoryboardPendingJob, frame: FrameRow | undefined): void {
+  private revert(
+    job: StoryboardPendingJob,
+    frame: FrameRow | undefined,
+    done: () => void,
+  ): void {
     const previous = job.previous_media_id ?? null;
     if (job.kind === 'frame') {
       this.board?.scenes?.forEach((scene: any) =>
@@ -222,16 +304,17 @@ export class StoryboardRevisePanelComponent implements OnChanges, OnDestroy {
       });
       this.frameErrors = [
         ...this.frameErrors,
-        `Character sheet ${job.key}: new image failed.`,
+        `Character sheet ${job.key}: image failed.`,
       ];
     }
-    this.finish(frame);
+    this.finish(frame, done);
     this.loadUrls();
   }
 
-  private finish(frame: FrameRow | undefined): void {
+  private finish(frame: FrameRow | undefined, done: () => void): void {
     if (frame) frame.pending = false;
     this.pendingCount = Math.max(0, this.pendingCount - 1);
+    done();
   }
 
   private loadUrls(): void {

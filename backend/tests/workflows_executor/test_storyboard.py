@@ -30,6 +30,7 @@ from src.workflows.presets.workflow_presets import load_presets
 from src.workflows.schema.workflow_model import (
     GenerateStoryboardInputs,
     GenerateStoryboardSettings,
+    RenderStoryboardDto,
     ReviseStoryboardDto,
     WorkflowModel,
 )
@@ -123,7 +124,7 @@ def _request(**settings) -> GenerateStoryboardRequest:
     return GenerateStoryboardRequest(
         workspace_id=7,
         inputs=GenerateStoryboardInputs(brief="SCENE 01 - Meet Astrid ..."),
-        config=GenerateStoryboardSettings(**settings),
+        config=GenerateStoryboardSettings(**{"plan_first": False, **settings}),
     )
 
 
@@ -384,7 +385,9 @@ async def test_generate_passes_reference_images(service):
     request = GenerateStoryboardRequest(
         workspace_id=7,
         inputs=GenerateStoryboardInputs(brief="reel", reference_images=[55]),
-        config=GenerateStoryboardSettings(character_sheets=False),
+        config=GenerateStoryboardSettings(
+            character_sheets=False, plan_first=False
+        ),
     )
 
     result = await service.generate_storyboard(request)
@@ -543,6 +546,117 @@ async def test_revise_rejects_foreign_shot_list(service):
     assert exc.value.status_code == 400
 
 
+# --- Plan first: approve, then draw ---
+
+
+async def _approved_plan(service) -> dict:
+    """A plan-first run: text plan only, nothing drawn."""
+    _mock_planner(service, _plan())
+    api = _use_api(service, FakeImageApi())
+    result = await service.generate_storyboard(_request(plan_first=True))
+    assert api.bodies == []
+    return result
+
+
+def _render_dto(shot_list: dict, phase: str) -> RenderStoryboardDto:
+    return RenderStoryboardDto(
+        workspace_id=7, shot_list=copy.deepcopy(shot_list), phase=phase
+    )
+
+
+@pytest.mark.anyio
+async def test_plan_first_returns_plan_without_images(service):
+    result = await _approved_plan(service)
+
+    shot_list = result["shot_list"]
+    assert shot_list["awaiting_approval"] is True
+    assert result["storyboard_frames"] == []
+    assert _frame_ids(shot_list) == [None, None, None, None]
+    assert "awaiting approval" in result["storyboard_text"]
+    assert "not drawn yet" in result["storyboard_text"]
+    assert "image FAILED" not in result["storyboard_text"]
+
+
+@pytest.mark.anyio
+async def test_plan_only_revise_changes_text_and_draws_nothing(service):
+    plan_board = (await _approved_plan(service))["shot_list"]
+    _mock_planner(service, _revision({"op": "remove", "shot_number": 4}))
+    api = _use_api(service, FakeImageApi())
+
+    dto = _revise_dto(plan_board, "Cut the last shot")
+    dto.plan_only = True
+    result = await service.revise_storyboard(dto)
+
+    assert api.bodies == []
+    assert result["shot_list"]["awaiting_approval"] is True
+    assert len(_frame_ids(result["shot_list"])) == 3
+
+
+@pytest.mark.anyio
+async def test_render_sheets_then_frames(service):
+    plan_board = (await _approved_plan(service))["shot_list"]
+    service._poll_job_status.reset_mock()
+
+    sheets_api = _use_api(service, FakeImageApi(start=300))
+    after_sheets = await service.render_storyboard(
+        _render_dto(plan_board, "sheets"), "Bearer t"
+    )
+    assert len(sheets_api.bodies) == 1 and _is_sheet(sheets_api.bodies[0])
+    assert after_sheets["pending"][0]["kind"] == "character_sheet"
+    assert after_sheets["shot_list"]["awaiting_approval"] is True
+    sheet_id = after_sheets["character_sheets"][0]
+
+    frames_api = _use_api(service, FakeImageApi(start=400))
+    drawn = await service.render_storyboard(
+        _render_dto(after_sheets["shot_list"], "frames"), "Bearer t"
+    )
+    service._poll_job_status.assert_not_called()
+    assert len(frames_api.bodies) == 4
+    assert all(
+        b["source_media_items"][0]["media_item_id"] == sheet_id
+        for b in frames_api.bodies
+    )
+    assert drawn["shot_list"]["awaiting_approval"] is False
+    assert len(drawn["pending"]) == 4
+    assert drawn["storyboard_frames"] == _frame_ids(drawn["shot_list"])
+
+
+@pytest.mark.anyio
+async def test_render_frames_skips_frames_already_drawn(service):
+    board = await _first_board(service)
+    api = _use_api(service, FakeImageApi(start=700))
+    result = await service.render_storyboard(_render_dto(board, "frames"))
+    assert api.bodies == []
+    assert result["storyboard_frames"] == _frame_ids(board)
+
+
+@pytest.mark.anyio
+async def test_render_rejects_foreign_shot_list(service):
+    with pytest.raises(HTTPException) as exc:
+        await service.render_storyboard(
+            RenderStoryboardDto(
+                workspace_id=7, shot_list={"x": 1}, phase="frames"
+            )
+        )
+    assert exc.value.status_code == 400
+
+
+def test_render_endpoint_passes_auth_header():
+    executor = MagicMock()
+    executor.render_storyboard = AsyncMock(return_value={"pending": []})
+    client = _client(AsyncMock(), executor)
+
+    response = client.post(
+        "/api/workflows/storyboard/render",
+        json={"workspace_id": 7, "shot_list": _plan_dict(), "phase": "sheets"},
+        headers={"Authorization": "Bearer abc"},
+    )
+
+    assert response.status_code == 200
+    dto, auth = executor.render_storyboard.call_args.args
+    assert auth == "Bearer abc" and dto.phase == "sheets"
+
+
 # --- Contract with the image API (drift guards) ---
 
 
@@ -588,6 +702,7 @@ def test_presets_load_and_validate():
     steps = presets["storyboard_generator"].workflow.steps
     assert steps[1].type.value == "generate_storyboard"
     assert steps[1].settings.frame_style == "photo_previz"
+    assert steps[1].settings.plan_first is True
 
 
 def test_storyboard_step_gets_long_timeout_in_yaml():

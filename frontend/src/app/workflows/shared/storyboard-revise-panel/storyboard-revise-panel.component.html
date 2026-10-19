@@ -17,47 +17,57 @@
 <div class="mt-4 bg-neutral-700 p-3 rounded-lg">
   <div class="flex items-center justify-between gap-2">
     <div>
-      <p class="text-sm font-medium text-neutral-200">Revise this storyboard</p>
+      <p class="text-sm font-medium text-neutral-200">
+        {{ awaitingApproval ? 'Review and approve the plan' : 'Revise this storyboard' }}
+      </p>
       <p class="text-xs text-neutral-400">
-        Write a note under the frames you want changed. Frames without a note keep their image.
+        <ng-container *ngIf="awaitingApproval">
+          Read the scenes below. Add notes to change the plan, or approve to draw the frames.
+        </ng-container>
+        <ng-container *ngIf="!awaitingApproval">
+          Write a note under the frames you want changed. Frames without a note keep their image.
+        </ng-container>
       </p>
     </div>
     <button mat-stroked-button type="button" (click)="isOpen = !isOpen">
       <mat-icon>{{ isOpen ? 'expand_less' : 'edit' }}</mat-icon>
-      {{ isOpen ? 'Close' : 'Revise' }}
+      {{ isOpen ? 'Close' : (awaitingApproval ? 'Review' : 'Revise') }}
     </button>
   </div>
 
   <div *ngIf="isOpen" class="mt-3">
-    <p *ngIf="revisionCount > 0 && pendingCount > 0" class="text-xs text-amber-300 mb-2">
-      Revision {{ revisionCount }}: updating {{ pendingCount }} image(s). The rest of the board is unchanged.
+    <p *ngIf="pendingCount > 0" class="text-xs text-amber-300 mb-2">
+      Drawing {{ pendingCount }} image(s). The rest of the board is unchanged.
     </p>
-    <p *ngIf="revisionCount > 0 && pendingCount === 0" class="text-xs text-green-300 mb-2">
-      Revision {{ revisionCount }} applied. Revise again or copy the board.
+    <p *ngIf="revisionCount > 0 && pendingCount === 0 && !isBusy" class="text-xs text-green-300 mb-2">
+      {{ awaitingApproval ? 'Plan updated. Review it again or approve.' : 'Changes applied. Revise again or copy the board.' }}
     </p>
+
+    <pre *ngIf="awaitingApproval && boardText"
+      class="text-xs text-neutral-200 bg-neutral-900 rounded p-2 mb-3 whitespace-pre-wrap max-h-80 overflow-auto">{{ boardText }}</pre>
 
     <div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
       <div *ngFor="let frame of frames" class="bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden">
         <div class="aspect-video bg-neutral-800 flex items-center justify-center">
           <div *ngIf="frame.pending" class="flex flex-col items-center gap-1">
             <mat-spinner diameter="22"></mat-spinner>
-            <span class="text-[11px] text-neutral-400">Updating frame...</span>
+            <span class="text-[11px] text-neutral-400">Drawing frame...</span>
           </div>
           <ng-container *ngIf="!frame.pending">
             <img *ngIf="frameUrl(frame)" [src]="frameUrl(frame)" class="w-full h-full object-cover" alt="Storyboard frame">
             <span *ngIf="!frameUrl(frame)" class="text-xs text-neutral-500">
-              {{ frame.mediaId ? 'Loading...' : 'No image' }}
+              {{ frame.mediaId ? 'Loading...' : (awaitingApproval ? 'Drawn after approval' : 'No image') }}
             </span>
           </ng-container>
         </div>
         <div class="p-2">
           <p class="text-[11px] text-neutral-400 truncate">{{ frame.shotNumber }}. {{ frame.sceneTitle }}</p>
-          <p class="text-xs text-neutral-200 mb-1 line-clamp-2">{{ frame.action }}</p>
+          <p class="text-xs text-neutral-200 mb-1 line-clamp-3">{{ frame.action }}</p>
           <textarea
             [(ngModel)]="frame.note"
             rows="2"
             class="w-full text-xs bg-neutral-800 text-neutral-100 rounded p-1 border border-neutral-700"
-            placeholder="Change for this frame (optional)"
+            [placeholder]="awaitingApproval ? 'Change for this shot (optional)' : 'Change for this frame (optional)'"
           ></textarea>
         </div>
       </div>
@@ -76,18 +86,29 @@
       <li *ngFor="let e of frameErrors">{{ e }}</li>
     </ul>
 
-    <div class="flex items-center gap-2 mt-3">
+    <div class="flex flex-wrap items-center gap-2 mt-3">
       <button
+        *ngIf="awaitingApproval"
         mat-flat-button
         color="primary"
         type="button"
-        [disabled]="!hasNotes || isRevising || pendingCount > 0"
+        [disabled]="!canAct"
+        (click)="approve()"
+      >
+        <mat-icon>check_circle</mat-icon>
+        Approve &amp; draw frames
+      </button>
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!hasNotes || !canAct"
         (click)="revise()"
       >
-        <mat-icon *ngIf="!isRevising">auto_fix_high</mat-icon>
-        {{ isRevising ? 'Planning changes...' : 'Apply changes' }}
+        <mat-icon>auto_fix_high</mat-icon>
+        {{ awaitingApproval ? 'Update plan' : 'Apply changes' }}
       </button>
-      <mat-spinner *ngIf="isRevising" diameter="20"></mat-spinner>
+      <mat-spinner *ngIf="isBusy" diameter="20"></mat-spinner>
+      <span *ngIf="isBusy" class="text-xs text-neutral-300">{{ busyLabel }}</span>
       <button *ngIf="boardText" mat-stroked-button type="button" (click)="copyBoard()">
         <mat-icon>content_copy</mat-icon>
         {{ copied ? 'Copied' : 'Copy board text' }}

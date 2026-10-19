@@ -45,6 +45,14 @@ export interface StoryboardRevisionRequest {
   shot_list: any;
   change_notes: string;
   settings: any;
+  plan_only?: boolean;
+}
+
+export interface StoryboardRenderRequest {
+  workspace_id: number;
+  shot_list: any;
+  phase: 'sheets' | 'frames';
+  settings: any;
 }
 
 export interface StoryboardPendingJob {
@@ -202,6 +210,15 @@ export class WorkflowService implements OnDestroy {
   ): Observable<StoryboardRevisionResult> {
     return this.http.post<StoryboardRevisionResult>(
       `${this.API_BASE_URL}/workflows/storyboard/revise`,
+      request,
+    );
+  }
+
+  renderStoryboard(
+    request: StoryboardRenderRequest,
+  ): Observable<StoryboardRevisionResult> {
+    return this.http.post<StoryboardRevisionResult>(
+      `${this.API_BASE_URL}/workflows/storyboard/render`,
       request,
     );
   }

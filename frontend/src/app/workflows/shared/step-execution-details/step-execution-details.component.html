@@ -185,4 +185,5 @@
 <app-storyboard-revise-panel
   *ngIf="stepType === NodeTypes.GENERATE_STORYBOARD && outputs?.shot_list?.scenes"
   [shotList]="outputs.shot_list"
+  [storyboardText]="outputs.storyboard_text"
 ></app-storyboard-revise-panel>

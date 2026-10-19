@@ -537,6 +537,7 @@ def build_edit_prompt(shot: StoryboardShot) -> str:
 def render_storyboard_text(
     plan: StoryboardPlan,
     frame_ids: dict[int, int | None],
+    drawn: bool = True,
 ) -> str:
     """Plain-text board in the house format, for the panel and for Jira."""
     lines: list[str] = [
@@ -548,6 +549,12 @@ def render_storyboard_text(
         f"Key message: {plan.key_message}",
         "",
     ]
+    if not drawn:
+        lines.append(
+            "STATUS: plan awaiting approval. Review it, request changes if "
+            "needed, then approve to draw the frames."
+        )
+        lines.append("")
     if plan.open_questions:
         lines.append("OPEN QUESTIONS (answer before production):")
         lines.extend(f"  - {q}" for q in plan.open_questions)
@@ -576,7 +583,10 @@ def render_storyboard_text(
         lines.append("  Shots:")
         for shot in scene.shots:
             frame = frame_ids.get(shot.shot_number)
-            label = f"image #{frame}" if frame else "image FAILED"
+            if not drawn:
+                label = "not drawn yet"
+            else:
+                label = f"image #{frame}" if frame else "image FAILED"
             flag = (
                 " [USE REAL SCREENSHOT]" if shot.needs_real_screenshot else ""
             )

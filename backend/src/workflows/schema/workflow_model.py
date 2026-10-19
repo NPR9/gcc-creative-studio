@@ -281,6 +281,9 @@ class GenerateStoryboardSettings(BaseModel):
     max_frames: int = Field(default=24, ge=3, le=48)
     options_per_beat: int = Field(default=3, ge=2, le=6)
     character_sheets: bool = True
+    # Plan first: the run returns the text plan only; frames are drawn after
+    # the requester approves it in the storyboard panel.
+    plan_first: bool = True
     language: str = "English"
     brand_guidelines: bool = True
     brand_context: str | None = None
@@ -302,6 +305,23 @@ class ReviseStoryboardDto(BaseModel):
     workspace_id: int = Field(ge=1)
     shot_list: dict[str, Any]
     change_notes: str = Field(min_length=1, max_length=10000)
+    settings: GenerateStoryboardSettings = Field(
+        default_factory=GenerateStoryboardSettings
+    )
+    # True while the plan is awaiting approval: update the plan, draw nothing.
+    plan_only: bool = False
+
+
+class RenderStoryboardDto(BaseModel):
+    """Request to draw an approved plan.
+
+    Two phases keep each call short: "sheets" starts the character sheets,
+    "frames" (called once the sheets are ready) starts every frame.
+    """
+
+    workspace_id: int = Field(ge=1)
+    shot_list: dict[str, Any]
+    phase: Literal["sheets", "frames"]
     settings: GenerateStoryboardSettings = Field(
         default_factory=GenerateStoryboardSettings
     )

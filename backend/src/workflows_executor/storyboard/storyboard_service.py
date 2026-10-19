@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from src.common.schema.media_item_model import AssetRoleEnum
 from src.workflows.schema.workflow_model import (
     GenerateStoryboardSettings,
+    RenderStoryboardDto,
     ReviseStoryboardDto,
 )
 from src.workflows_executor.dto.workflows_executor_dto import (
@@ -172,6 +173,10 @@ class StoryboardService:
             reference_media_items=media_items,
             reference_asset_ids=asset_ids,
         )
+        if settings.plan_first:
+            # Stop at the plan; the requester approves it in the panel and
+            # the frames are drawn through render().
+            return self._outputs(plan, ctx, _Rendered(), awaiting_approval=True)
         rendered = _Rendered()
         await self._render_character_sheets(plan, ctx, rendered, previous={})
         await self._render_frames(
@@ -242,6 +247,9 @@ class StoryboardService:
             ),
             reference_asset_ids=list(previous.get("reference_asset_ids") or []),
         )
+        if dto.plan_only:
+            # Plan still awaiting approval: update the text, draw nothing.
+            return self._outputs(plan, ctx, _Rendered(), awaiting_approval=True)
         rendered = _Rendered()
         await self._render_character_sheets(
             plan, ctx, rendered, previous=previous_sheets
@@ -258,6 +266,79 @@ class StoryboardService:
             ctx,
             rendered,
             reference_sheets=ready_sheets,
+            previous_frames=previous_frames,
+        )
+        return self._outputs(plan, ctx, rendered)
+
+    async def render(
+        self,
+        dto: RenderStoryboardDto,
+        authorization: str | None = None,
+    ) -> dict[str, Any]:
+        """Draws an approved plan in two short phases.
+
+        "sheets" starts the character sheets; "frames" (called once those
+        are ready) starts every frame that has no image yet. Both return at
+        once with `pending`, so each browser call stays far below 60s.
+        """
+        previous = dto.shot_list
+        try:
+            plan = StoryboardPlan.model_validate(previous)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail="shot_list is not a storyboard from this workflow.",
+            ) from e
+
+        ctx = _RenderContext(
+            settings=dto.settings,
+            workspace_id=dto.workspace_id,
+            authorization=authorization,
+            wait=False,
+            reference_media_items=list(
+                previous.get("reference_media_items") or []
+            ),
+            reference_asset_ids=list(previous.get("reference_asset_ids") or []),
+        )
+        previous_frames = {
+            shot.get("shot_number"): shot.get("frame_media_id")
+            for scene in previous.get("scenes", [])
+            for shot in scene.get("shots", [])
+        }
+        rendered = _Rendered()
+
+        if dto.phase == "sheets":
+            previous_sheets = {
+                c.get("key"): {
+                    "id": c.get("character_sheet_id"),
+                    "signature": _character_signature_dict(c),
+                }
+                for c in previous.get("characters", [])
+            }
+            await self._render_character_sheets(
+                plan, ctx, rendered, previous=previous_sheets
+            )
+            rendered.frame_ids = {
+                number: media_id
+                for number, media_id in previous_frames.items()
+                if media_id
+            }
+            return self._outputs(plan, ctx, rendered, awaiting_approval=True)
+
+        rendered.sheet_ids = {
+            c.get("key"): c.get("character_sheet_id")
+            for c in previous.get("characters", [])
+            if c.get("character_sheet_id")
+        }
+        for _, shot in plan.all_shots():
+            if previous_frames.get(shot.shot_number):
+                shot.revision = "keep"
+                shot.source_shot_number = shot.shot_number
+        await self._render_frames(
+            plan,
+            ctx,
+            rendered,
+            reference_sheets=dict(rendered.sheet_ids),
             previous_frames=previous_frames,
         )
         return self._outputs(plan, ctx, rendered)
@@ -504,6 +585,7 @@ class StoryboardService:
         plan: StoryboardPlan,
         ctx: _RenderContext,
         rendered: _Rendered,
+        awaiting_approval: bool = False,
     ) -> dict[str, Any]:
         shot_list = plan.model_dump(exclude=_PLAN_EXCLUDE)
         for scene in shot_list["scenes"]:
@@ -521,6 +603,7 @@ class StoryboardService:
         shot_list["reference_media_items"] = ctx.reference_media_items
         shot_list["reference_asset_ids"] = ctx.reference_asset_ids
         shot_list["settings"] = ctx.settings.model_dump()
+        shot_list["awaiting_approval"] = awaiting_approval
 
         frames = [
             rendered.frame_ids[shot.shot_number]
@@ -535,7 +618,9 @@ class StoryboardService:
         outputs = {
             "storyboard_frames": frames,
             "character_sheets": sheets,
-            "storyboard_text": render_storyboard_text(plan, rendered.frame_ids),
+            "storyboard_text": render_storyboard_text(
+                plan, rendered.frame_ids, drawn=not awaiting_approval
+            ),
             "shot_list": shot_list,
         }
         if not ctx.wait:

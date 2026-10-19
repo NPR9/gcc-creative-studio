@@ -1,7 +1,7 @@
 {
   "id": "storyboard_generator",
   "name": "Storyboard Generator",
-  "description": "Paste your script or describe the video in plain words. Gemini builds a storyboard in the studio's house format: a character sheet, then each scene with its voiceover, shot list and frames. Attach product or reference images to keep it on-brand. Not happy with some frames? Use Revise to change only those.",
+  "description": "Paste your script or describe the video in plain words. Gemini plans the storyboard in the studio's house format; you review and approve the plan, then it draws a character sheet and every frame. Attach product or reference images to keep it on-brand. Not happy with some frames? Use Revise to change only those.",
   "category": "Briefing",
   "steps": [
     {
@@ -44,7 +44,8 @@
         "character_sheets": true,
         "language": "English",
         "brand_guidelines": true,
-        "brand_context": null
+        "brand_context": null,
+        "plan_first": true
       },
       "outputs": {}
     }
